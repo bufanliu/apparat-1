@@ -23,14 +23,14 @@ package apparat.swf
 import apparat.swc.Swc
 import apparat.utils.IO._
 import java.io.{
-	BufferedInputStream => JBufferedInputStream,
-	File => JFile,
-	FileInputStream => JFileInputStream,
-	FileOutputStream => JFileOutputStream,
-	ByteArrayInputStream => JByteArrayInputStream,
-	ByteArrayOutputStream => JByteArrayOutputStream,
-	InputStream => JInputStream,
-	OutputStream => JOutputStream
+BufferedInputStream => JBufferedInputStream,
+File => JFile,
+FileInputStream => JFileInputStream,
+FileOutputStream => JFileOutputStream,
+ByteArrayInputStream => JByteArrayInputStream,
+ByteArrayOutputStream => JByteArrayOutputStream,
+InputStream => JInputStream,
+OutputStream => JOutputStream
 }
 import java.util.zip.{Inflater => JInflater}
 import scala.annotation.tailrec
@@ -38,261 +38,317 @@ import apparat.utils.{Dumpable, Deflate, IndentingPrintWriter}
 import apparat.lzma.LZMA
 
 object Swf {
-	def fromFile(file: JFile): Swf = {
-		val name = file.getName.toLowerCase
+  def fromFile(file: JFile): Swf = {
+    val name = file.getName.toLowerCase
 
-		if(name endsWith ".swc") {
-			fromSwc(Swc fromFile file)
-		} else if(name endsWith ".swf") {
-			val swf = new Swf
-			swf read file
-			swf
-		} else {
-			using(new JFileInputStream(file)) {
-				input => {
-					val b0 = input.read()
+    if (name endsWith ".swc") {
+      fromSwc(Swc fromFile file)
+    } else if (name endsWith ".swf") {
+      val swf = new Swf
+      swf read file
+      swf
+    } else {
+      using(new JFileInputStream(file)) {
+        input => {
+          val b0 = input.read()
 
-					if(('F' == b0 || 'C' == b0) && 'W' == input.read() && 'S' == input.read()) {
-						val swf = new Swf
-						swf read file
-						swf
-					} else if ('P' == b0 && 'K' == input.read()) {
-						fromSwc(Swc fromFile file)
-					} else {
-						error("Unknown file "+file.getAbsolutePath+".")
-					}
-				}
-			}
-		}
-	}
+          if (('F' == b0 || 'C' == b0) && 'W' == input.read() && 'S' == input.read()) {
+            val swf = new Swf
+            swf read file
+            swf
+          } else if ('P' == b0 && 'K' == input.read()) {
+            fromSwc(Swc fromFile file)
+          } else {
+            error("Unknown file " + file.getAbsolutePath + ".")
+          }
+        }
+      }
+    }
+  }
 
-	def fromFile(pathname: String): Swf = fromFile(new JFile(pathname))
+  def fromFile(pathname: String): Swf = fromFile(new JFile(pathname))
 
-	def fromSwc(swc: Swc) = {
-		val swf = new Swf
-		swf read swc
-		swf
-	}
+  def fromSwc(swc: Swc) = {
+    val swf = new Swf
+    swf read swc
+    swf
+  }
 
-	def fromInputStream(input: JInputStream, length: Long) = {
-		val swf = new Swf
-		swf.read(input, length)
-		swf
-	}
+  def fromInputStream(input: JInputStream, length: Long) = {
+    val swf = new Swf
+    swf.read(input, length)
+    swf
+  }
 }
 
 final class Swf extends Dumpable with SwfTagMapping {
-	var compressed: Boolean = true
-	var version: Int = 10
-	var frameSize: Rect = new Rect(0, 20000, 0, 20000)
-	var frameRate: Float = 255.0f
-	var frameCount: Int = 1
-	var tags: List[SwfTag] = Nil
+  var compressed: Boolean = true
+  var compressedType = 'C'
+  var version: Int = 10
+  var frameSize: Rect = new Rect(0, 20000, 0, 20000)
+  var frameRate: Float = 255.0f
+  var frameCount: Int = 1
+  var tags: List[SwfTag] = Nil
 
-	def width = frameSize._2 / 20
-	def height = frameSize._4 / 20
+  def width = frameSize._2 / 20
 
-	def foreach(body: SwfTag => Unit) = tags foreach body
+  def height = frameSize._4 / 20
 
-	def read(file: JFile): Unit = using(new JBufferedInputStream(new JFileInputStream(file), 0x1000))(read(_, file.length))
+  def foreach(body: SwfTag => Unit) = tags foreach body
 
-	def read(pathname: String): Unit = read(new JFile(pathname))
+  def read(file: JFile): Unit = using(new JBufferedInputStream(new JFileInputStream(file), 0x1000))(read(_, file.length))
 
-	def read(input: JInputStream, inputLength: Long): Unit = using(new SwfInputStream(input))(read(_, inputLength))
+  def read(pathname: String): Unit = read(new JFile(pathname))
 
-	def read(data: Array[Byte]): Unit = using(new JByteArrayInputStream(data))(read(_, data.length))
+  def read(input: JInputStream, inputLength: Long): Unit = using(new SwfInputStream(input))(read(_, inputLength))
 
-	def read(swc: Swc): Unit = {
-		swc.library match {
-			case Some(data) => read(data)
-			case None =>
-		}
-	}
+  def read(data: Array[Byte]): Unit = using(new JByteArrayInputStream(data))(read(_, data.length))
 
-	def read(input: SwfInputStream, inputLength: Long): Unit = {
-		(input.readUI08(), input.readUI08(), input.readUI08()) match {
-			case (x, 'W', 'S') => compressed = x match {
-				case 'C' => true
-				case 'F' => false
-				case _ => error("Not a SWF file.")
-			}
-			case _ => error("Not a SWF file.")
-		}
+  def read(swc: Swc): Unit = {
+    swc.library match {
+      case Some(data) => read(data)
+      case None =>
+    }
+  }
 
-		version = input.readUI08()
+  def read(input: SwfInputStream, inputLength: Long): Unit = {
+    val (compType, isCompressed) = {
+      (input.readUI08(), input.readUI08(), input.readUI08()) match {
+        case (x, 'W', 'S') => x match {
+          case 'C' => (x, true)
+          case 'Z' => (x, true)
+          case 'F' => (x, false)
+          case _ => sys.error("Not a SWF file.")
+        }
+        case _ => sys.error("Not a SWF file.")
+      }
+    }
 
-		val uncompressedLength = input.readUI32()
-		val uncompressed = compressed match {
-			case true => {
-				assert(version > 5)
-				uncompress(inputLength, uncompressedLength)(input)
-			}
-			case false => input
-		}
+    compressedType = compType.toChar
+    compressed = isCompressed
 
-		try {
-			frameSize = uncompressed.readRECT()
-			frameRate = uncompressed.readFIXED8()
-			frameCount = uncompressed.readUI16()
+    version = input.readUI08()
 
-			// Issue 34, since 10.1
-			// assert(frameSize.minX == 0 && frameSize.minY == 0, "Frame size: "+frameSize.minX+", "+frameSize.minY)
-			assert(frameRate >= 0)
-			assert(frameCount > 0)
+    val uncompressedLength = input.readUI32()
+    val uncompressed = compressed match {
+      case true => {
+        compressedType match {
+          case 'C' => {
+            assert(version > 5)
+            uncompress(inputLength, uncompressedLength)(input)
+          }
+          case 'Z' => {
+            assert(version >= 13)
+            lzmaUncompress(inputLength, uncompressedLength)(input)
+          }
+        }
 
-			tags = tagsOf(uncompressed)
-		} finally {
-			if(compressed) {
-				try {
-					uncompressed.close()
-				} catch {
-					case _ =>
-				}
-			}
-		}
-	}
+      }
+      case false => input
+    }
 
-	private def tagsOf(implicit input: SwfInputStream): List[SwfTag] = {
-		@tailrec def loop(tag: SwfTag, acc: List[SwfTag]): List[SwfTag] = {
-			val result = tag :: acc
-			if(tag.kind == SwfTags.End) result else loop(input.readTAG(), result)
-		}
+    try {
+      frameSize = uncompressed.readRECT()
+      frameRate = uncompressed.readFIXED8()
+      frameCount = uncompressed.readUI16()
 
-		loop(input.readTAG(), List.empty).reverse
-	}
+      // Issue 34, since 10.1
+      // assert(frameSize.minX == 0 && frameSize.minY == 0, "Frame size: "+frameSize.minX+", "+frameSize.minY)
+      assert(frameRate >= 0)
+      assert(frameCount > 0)
 
-	def write(file: JFile): Unit = using(new JFileOutputStream(file))(write _)
+      tags = tagsOf(uncompressed)
+    } finally {
+      if (compressed) {
+        try {
+          uncompressed.close()
+        } catch {
+          case _ =>
+        }
+      }
+    }
+  }
 
-	def write(pathname: String): Unit = write(new JFile(pathname))
+  private def tagsOf(implicit input: SwfInputStream): List[SwfTag] = {
+    @tailrec def loop(tag: SwfTag, acc: List[SwfTag]): List[SwfTag] = {
+      val result = tag :: acc
+      if (tag.kind == SwfTags.End) result else loop(input.readTAG(), result)
+    }
 
-	def write(output: JOutputStream): Unit = using(new SwfOutputStream(output))(write _)
+    loop(input.readTAG(), List.empty).reverse
+  }
 
-	def write(swc: Swc): Unit = {
-		val byteArrayOutputStream = new JByteArrayOutputStream()
+  def write(file: JFile): Unit = using(new JFileOutputStream(file))(write _)
 
-		try {
-			write(byteArrayOutputStream)
-			swc.library = Some(byteArrayOutputStream.toByteArray)
-		} finally {
-			try {
-				byteArrayOutputStream.close()
-			} catch {
-				case _ =>
-			}
-		}
-	}
+  def write(pathname: String): Unit = write(new JFile(pathname))
 
-	def write(output: SwfOutputStream): Unit = {
-		val byteArrayOutputStream = new JByteArrayOutputStream(0x08 + (tags.length << 0x03))
-		val buffer = new SwfOutputStream(byteArrayOutputStream)
+  def write(output: JOutputStream): Unit = using(new SwfOutputStream(output))(write _)
 
-		try {
-			buffer.writeRECT(frameSize)
-			buffer.writeFIXED8(frameRate)
-			buffer.writeUI16(frameCount)
-			buffer.flush()
+  def write(swc: Swc): Unit = {
+    val byteArrayOutputStream = new JByteArrayOutputStream()
 
-			tags foreach { buffer writeTAG _ }
-			buffer.flush()
+    try {
+      write(byteArrayOutputStream)
+      swc.library = Some(byteArrayOutputStream.toByteArray)
+    } finally {
+      try {
+        byteArrayOutputStream.close()
+      } catch {
+        case _ =>
+      }
+    }
+  }
 
-			val bytes = byteArrayOutputStream.toByteArray
+  def write(output: SwfOutputStream): Unit = {
+    val byteArrayOutputStream = new JByteArrayOutputStream(0x08 + (tags.length << 0x03))
+    val buffer = new SwfOutputStream(byteArrayOutputStream)
 
-			buffer.close()
+    try {
+      buffer.writeRECT(frameSize)
+      buffer.writeFIXED8(frameRate)
+      buffer.writeUI16(frameCount)
+      buffer.flush()
 
-			output.write(Array[Byte](if (compressed) 'C' else 'F', 'W', 'S'))
-			output.writeUI08(version)
-			output.writeUI32(8 + bytes.length)
+      tags foreach {
+        buffer writeTAG _
+      }
+      buffer.flush()
 
-			if (compressed) {
-				Deflate.compress(bytes, output)
-			} else {
-				output write bytes
-			}
+      val bytes = byteArrayOutputStream.toByteArray
 
-			output.flush()
-		} finally {
-			if (null != buffer) {
-				try {
-					buffer.close()
-				} catch {
-					case _ =>
-				}
-			}
-		}
-	}
+      buffer.close()
 
-	def uncompress(inputLength: Long, uncompressedLength: Long)(implicit input: JInputStream) = {
-		val totalBytes = (inputLength - 8).asInstanceOf[Int]//magic 8 is static part of header length
-		val inflater = new JInflater()
-		val bufferIn = new Array[Byte](totalBytes)
-		val bufferOut = new Array[Byte]((uncompressedLength - 8).asInstanceOf[Int])
+      compressedType = compressed match {
+        case true => if (version < 13) 'C' else 'Z'
+        case _ => 'F'
+      }
 
-		readBytes(totalBytes, bufferIn)
+      output.write(Array[Byte](compressedType.toByte, 'W', 'S'))
+      output.writeUI08(version)
+      output.writeUI32(8 + bytes.length)
 
-		inflater setInput (bufferIn)
+      compressedType match {
+        case 'C' => Deflate.compress(bytes, output)
+        case 'Z' => {
+          val lzmaByteArrayOutputStream = new JByteArrayOutputStream()
+          LZMA.encodeForFP(new JByteArrayInputStream(bytes), bytes.length, lzmaByteArrayOutputStream)
+          val lzBA = lzmaByteArrayOutputStream.toByteArray
+          output writeUI32 lzBA.length
+          output write lzBA
+        }
+        case _ => output write bytes
+      }
 
-		var offset = -1
-		while (0 != offset && !inflater.finished()) {
-			offset = inflater inflate bufferOut
-			if (0 == offset && inflater.needsInput) {
-				error("Need more input.")
-			}
-		}
+      output.flush()
+    } finally {
+      if (null != buffer) {
+        try {
+          buffer.close()
+        } catch {
+          case _ =>
+        }
+      }
+    }
+  }
 
-		new SwfInputStream(new JByteArrayInputStream(bufferOut))
-	}
+  def uncompress(inputLength: Long, uncompressedLength: Long)(implicit input: JInputStream) = {
+    val totalBytes = (inputLength - 8).asInstanceOf[Int] //magic 8 is static part of header length
+    val inflater = new JInflater()
+    val bufferIn = new Array[Byte](totalBytes)
+    val bufferOut = new Array[Byte]((uncompressedLength - 8).asInstanceOf[Int])
 
-	def toByteArray = {
-		val byteArrayOutputStream = new JByteArrayOutputStream()
-		using(byteArrayOutputStream) { write _ }
-		byteArrayOutputStream.toByteArray
-	}
+    readBytes(totalBytes, bufferIn)
 
-	def toLZMAByteArray = {
-		val oldCompression = compressed
+    inflater setInput (bufferIn)
 
-		try {
-			compressed = false
+    var offset = -1
+    while (0 != offset && !inflater.finished()) {
+      offset = inflater inflate bufferOut
+      if (0 == offset && inflater.needsInput) {
+        error("Need more input.")
+      }
+    }
 
-			val swfByteArrayOutputStream = new JByteArrayOutputStream()
-			val lzmaByteArrayOutputStream = new JByteArrayOutputStream()
+    new SwfInputStream(new JByteArrayInputStream(bufferOut))
+  }
 
-			using(swfByteArrayOutputStream) { write _ }
+  def lzmaUncompress(inputLength: Long, uncompressedLength: Long)(implicit input: SwfInputStream) = {
+    val lzmaLen = input.readUI32()
 
-			val byteArray = swfByteArrayOutputStream.toByteArray
+    val properties = new Array[Byte](5)
+    readBytes(5, properties)
 
-			LZMA.encode(new JByteArrayInputStream(byteArray), byteArray.length, lzmaByteArrayOutputStream)
-			lzmaByteArrayOutputStream.toByteArray
-		} finally {
-			compressed = oldCompression
-		}
-	}
+    val totalBytes = (uncompressedLength - 8).asInstanceOf[Int] //magic 8 is static part of header length
+    val os = new JByteArrayOutputStream(totalBytes)
 
-	override def dump(writer: IndentingPrintWriter) = {
-		writer <= "Swf:"
-		writer withIndent {
-			writer <= "Compressed: "+compressed
-			writer <= "Version: "+version
-			writer <= "Framesize:"+frameSize
-			writer <= "Framerate:"+frameRate
-			writer <= "Framecount:"+frameCount
-			writer <= "Tags:"
-			writer withIndent {
-				for(tag <- tags) tag match {
-					case dumpable: Dumpable => dumpable dump writer
-					case other => writer <= other.toString
-				}
-			}
-		}
-	}
+    LZMA.decode(properties, input, totalBytes, os)
 
-	lazy val mainClass = tags find { _.kind == SwfTags.SymbolClass } match {
-		case Some(symbolClass: SymbolClass) => symbolClass.symbols find { _._1 == 0 } map { _._2 }
-		case _=> None
-	}
+    new SwfInputStream(new JByteArrayInputStream(os.toByteArray))
+  }
 
-	lazy val backgroundColor = tags find { _.kind == SwfTags.SetBackgroundColor } match {
-		case Some(setBackgroundColor: SetBackgroundColor) => Some(setBackgroundColor.color)
-		case _ => None
-	}
+  def toByteArray = {
+    val byteArrayOutputStream = new JByteArrayOutputStream()
+    using(byteArrayOutputStream) {
+      write _
+    }
+    byteArrayOutputStream.toByteArray
+  }
+
+  def toLZMAByteArray = {
+    val oldCompression = compressed
+
+    try {
+      compressed = false
+
+      val swfByteArrayOutputStream = new JByteArrayOutputStream()
+      val lzmaByteArrayOutputStream = new JByteArrayOutputStream()
+
+      using(swfByteArrayOutputStream) {
+        write _
+      }
+
+      val byteArray = swfByteArrayOutputStream.toByteArray
+
+      LZMA.encode(new JByteArrayInputStream(byteArray), byteArray.length, lzmaByteArrayOutputStream)
+      lzmaByteArrayOutputStream.toByteArray
+    } finally {
+      compressed = oldCompression
+    }
+  }
+
+  override def dump(writer: IndentingPrintWriter) = {
+    writer <= "Swf:"
+    writer withIndent {
+      writer <= "Compressed: " + compressed
+      writer <= "Version: " + version
+      writer <= "Framesize:" + frameSize
+      writer <= "Framerate:" + frameRate
+      writer <= "Framecount:" + frameCount
+      writer <= "Tags:"
+      writer withIndent {
+        for (tag <- tags) tag match {
+          case dumpable: Dumpable => dumpable dump writer
+          case other => writer <= other.toString
+        }
+      }
+    }
+  }
+
+  lazy val mainClass = tags find {
+    _.kind == SwfTags.SymbolClass
+  } match {
+    case Some(symbolClass: SymbolClass) => symbolClass.symbols find {
+      _._1 == 0
+    } map {
+      _._2
+    }
+    case _ => None
+  }
+
+  lazy val backgroundColor = tags find {
+    _.kind == SwfTags.SetBackgroundColor
+  } match {
+    case Some(setBackgroundColor: SetBackgroundColor) => Some(setBackgroundColor.color)
+    case _ => None
+  }
 }
