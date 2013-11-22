@@ -21,19 +21,32 @@
 package apparat.abc
 
 import apparat.utils.{IndentingPrintWriter, Dumpable}
+import apparat.bytecode.operations.GetLex
 
 class AbcScript(var init: AbcMethod, var traits: Array[AbcTrait]) extends Dumpable with HasTraits {
-	init.anonymous = false
+  init.anonymous = false
 
-	def accept(visitor: AbcVisitor) = visitor visit this
+  def accept(visitor: AbcVisitor) = visitor visit this
 
-	override def dump(writer: IndentingPrintWriter) = {
-		writer <= "Script:"
-		writer withIndent {
-			writer <= "Init:"
-			writer withIndent { init dump writer }
-			dumpTraits(writer)
-		}
-	}
+  override def dump(writer: IndentingPrintWriter) = {
+    writer <= "Script:"
+    writer withIndent {
+      writer <= "Init:"
+      writer withIndent {
+        init dump writer
+      }
+      dumpTraits(writer)
+    }
+  }
 
+  def isDefinedImport(name: AbcQName) = {
+    (init != null) && init.body.exists {
+      _.bytecode.exists {
+        _.ops.exists {
+          case GetLex(aName) if aName == name => true
+          case _ => false
+        }
+      }
+    }
+  }
 }
