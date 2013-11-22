@@ -199,6 +199,7 @@ trait AbstractAbcConstantPoolBuilder { self: AbcVisitor =>
 					case Equals() =>
 					case EscapeXMLAttribute() =>
 					case EscapeXMLElement() =>
+					case FindDef(name) => add(name)
 					case FindProperty(property) => add(property)
 					case FindPropStrict(property) => add(property)
 					case GetDescendants(property) => add(property)
