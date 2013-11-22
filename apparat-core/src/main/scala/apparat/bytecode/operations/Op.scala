@@ -462,6 +462,7 @@ case class DefaultXMLNamespaceLate() extends AbstractOpWithOperands(0, 1) with O
 case class Equals() extends AbstractBinaryOp { final override def opCode = Op.equals; final override def opCopy() = Equals() }
 case class EscapeXMLAttribute() extends AbstractOpWithOperands(1, 1) { final override def opCode = Op.esc_xattr; final override def opCopy() = EscapeXMLAttribute() }
 case class EscapeXMLElement() extends AbstractOpWithOperands(1, 1) { final override def opCode = Op.esc_xelem; final override def opCopy() = EscapeXMLElement() }
+case class FindDef(name: AbcName) extends AbstractOpWithOperands(1, 0)  with OpThatCanThrow { final override def opCode = Op.finddef; final override def opCopy() = copy() }
 case class FindProperty(property: AbcName) extends AbstractOpWithOperands(1, 0) with OpWithProperty { final override def opCode = Op.findproperty; final override def opCopy() = copy() }
 case class FindPropStrict(property: AbcName) extends AbstractOpWithOperands(1, 0) with OpWithProperty with OpThatCanThrow { final override def opCode = Op.findpropstrict; final override def opCopy() = copy() }
 case class GetDescendants(property: AbcName) extends AbstractOpWithOperands(1, 1) with OpWithProperty with OpThatCanThrow { final override def opCode = Op.getdescendants; final override def opCopy() = copy() }

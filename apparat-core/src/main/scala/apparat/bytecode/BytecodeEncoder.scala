@@ -117,6 +117,7 @@ object BytecodeEncoder {
 				case Equals() =>
 				case EscapeXMLAttribute() =>
 				case EscapeXMLElement() =>
+				case FindDef(aName) => name(aName)
 				case FindProperty(property) => name(property)
 				case FindPropStrict(property) => name(property)
 				case GetDescendants(property) => name(property)
