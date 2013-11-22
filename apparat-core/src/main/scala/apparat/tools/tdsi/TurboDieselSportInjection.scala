@@ -75,6 +75,8 @@ object TurboDieselSportInjection {
     // TODO more to add
     val classesToRemove = List(
       AbcQName('Structure, AbcNamespace(22, Symbol("apparat.memory"))),
+      AbcQName('Macro, AbcNamespace(22, Symbol("apparat.inline"))),
+      AbcQName('Inline, AbcNamespace(22, Symbol("apparat.inline"))),
       AbcQName('*, AbcNamespace(22, Symbol("apparat.asm")))
     )
     val methodsToRemove = List(
@@ -110,6 +112,13 @@ object TurboDieselSportInjection {
                 case _ =>
               }
             case AbcTraitConst(aName, _, _, _, _, md) if classesToRemove.exists(nameEquals(_, aName)) => {
+              checkForEmptyScript = true
+              md match {
+                case Some(metas) => newMetadatas = newMetadatas.filter(m => metas.exists(_ != m))
+                case _ =>
+              }
+            }
+            case AbcTraitSlot(aName, _, _, _, _, md) if classesToRemove.exists(nameEquals(_, aName)) => {
               checkForEmptyScript = true
               md match {
                 case Some(metas) => newMetadatas = newMetadatas.filter(m => metas.exists(_ != m))
