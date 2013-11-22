@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const EscapeXMLElement:int;
+		public var EscapeXMLElement:int;
 }

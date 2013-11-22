@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const BitAnd:int;
+		public var BitAnd:int;
 }

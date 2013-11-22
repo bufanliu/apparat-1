@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const NextName:int;
+		public var NextName:int;
 }

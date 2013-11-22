@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const GetDouble:int;
+		public var GetDouble:int;
 }

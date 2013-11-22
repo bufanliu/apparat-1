@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const AsTypeLate:int;
+		public var AsTypeLate:int;
 }

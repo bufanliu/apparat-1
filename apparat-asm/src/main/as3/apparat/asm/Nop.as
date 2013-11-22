@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Nop:int;
+		public var Nop:int;
 }

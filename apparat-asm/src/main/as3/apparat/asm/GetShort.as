@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const GetShort:int;
+		public var GetShort:int;
 }

@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Breakpoint:int;
+		public var Breakpoint:int;
 }

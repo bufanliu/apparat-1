@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const ReturnVoid:int;
+		public var ReturnVoid:int;
 }

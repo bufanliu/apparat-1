@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const SetInt:int;
+		public var SetInt:int;
 }

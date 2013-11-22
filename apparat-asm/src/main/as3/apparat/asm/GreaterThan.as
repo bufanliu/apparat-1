@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const GreaterThan:int;
+		public var GreaterThan:int;
 }

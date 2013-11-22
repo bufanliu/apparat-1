@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const MultiplyInt:int;
+		public var MultiplyInt:int;
 }

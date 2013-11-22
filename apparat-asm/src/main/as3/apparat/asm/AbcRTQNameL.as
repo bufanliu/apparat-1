@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-	public const AbcRTQNameL:int;
+	public var AbcRTQNameL:int;
 }

@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const PushScope:int;
+		public var PushScope:int;
 }

@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const BitNot:int;
+		public var BitNot:int;
 }

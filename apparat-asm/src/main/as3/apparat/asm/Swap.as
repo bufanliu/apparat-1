@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Swap:int;
+		public var Swap:int;
 }

@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Label:int;
+		public var Label:int;
 }

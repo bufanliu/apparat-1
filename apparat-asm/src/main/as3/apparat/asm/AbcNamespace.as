@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-	public function AbcNamespace(accessModifier:NamespaceKind, name:String) {}
+	public function AbcNamespace(accessModifier:NamespaceKind, name:String):void {}
 }

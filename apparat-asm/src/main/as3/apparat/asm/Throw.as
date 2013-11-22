@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Throw:int;
+		public var Throw:int;
 }

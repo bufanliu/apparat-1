@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const PushNaN:int;
+		public var PushNaN:int;
 }

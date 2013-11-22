@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const PopScope:int;
+		public var PopScope:int;
 }

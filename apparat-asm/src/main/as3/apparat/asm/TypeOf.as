@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const TypeOf:int;
+		public var TypeOf:int;
 }

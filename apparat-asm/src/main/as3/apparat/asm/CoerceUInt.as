@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const CoerceUInt:int;
+		public var CoerceUInt:int;
 }

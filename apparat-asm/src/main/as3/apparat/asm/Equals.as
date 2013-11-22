@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Equals:int;
+		public var Equals:int;
 }

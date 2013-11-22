@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Increment:int;
+		public var Increment:int;
 }

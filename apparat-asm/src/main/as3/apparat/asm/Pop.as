@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Pop:int;
+		public var Pop:int;
 }

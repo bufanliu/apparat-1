@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const GetGlobalScope:int;
+		public var GetGlobalScope:int;
 }

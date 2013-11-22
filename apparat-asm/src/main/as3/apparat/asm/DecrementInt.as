@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const DecrementInt:int;
+		public var DecrementInt:int;
 }

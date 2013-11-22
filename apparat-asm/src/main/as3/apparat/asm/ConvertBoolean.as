@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const ConvertBoolean:int;
+		public var ConvertBoolean:int;
 }

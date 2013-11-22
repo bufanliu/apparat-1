@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const DefaultXMLNamespaceLate:int;
+		public var DefaultXMLNamespaceLate:int;
 }

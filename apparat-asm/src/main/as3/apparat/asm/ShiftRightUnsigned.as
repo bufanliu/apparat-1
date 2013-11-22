@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const ShiftRightUnsigned:int;
+		public var ShiftRightUnsigned:int;
 }

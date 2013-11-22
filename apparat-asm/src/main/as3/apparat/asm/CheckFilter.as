@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const CheckFilter:int;
+		public var CheckFilter:int;
 }

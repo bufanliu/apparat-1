@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const SetFloat:int;
+		public var SetFloat:int;
 }

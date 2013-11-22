@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const GetLocal3:int;
+		public var GetLocal3:int;
 }

@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const LessEquals:int;
+		public var LessEquals:int;
 }

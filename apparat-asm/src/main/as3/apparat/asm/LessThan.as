@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const LessThan:int;
+		public var LessThan:int;
 }

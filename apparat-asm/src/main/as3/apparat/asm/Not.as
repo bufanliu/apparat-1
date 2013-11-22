@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Not:int;
+		public var Not:int;
 }

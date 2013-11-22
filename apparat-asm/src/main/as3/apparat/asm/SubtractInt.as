@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const SubtractInt:int;
+		public var SubtractInt:int;
 }

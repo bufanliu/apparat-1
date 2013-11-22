@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const NewActivation:int;
+		public var NewActivation:int;
 }

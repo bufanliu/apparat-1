@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const GetByte:int;
+		public var GetByte:int;
 }

@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const BitXor:int;
+		public var BitXor:int;
 }

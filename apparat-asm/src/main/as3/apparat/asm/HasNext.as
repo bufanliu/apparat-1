@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const HasNext:int;
+		public var HasNext:int;
 }

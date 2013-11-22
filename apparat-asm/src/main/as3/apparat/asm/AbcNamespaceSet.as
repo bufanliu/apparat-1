@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-	public function AbcNamespaceSet(...args) {}
+	public function AbcNamespaceSet(...args):void {}
 }

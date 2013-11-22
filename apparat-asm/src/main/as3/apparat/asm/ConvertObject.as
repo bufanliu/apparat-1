@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const ConvertObject:int;
+		public var ConvertObject:int;
 }

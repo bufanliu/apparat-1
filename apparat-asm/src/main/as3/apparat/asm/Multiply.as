@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Multiply:int;
+		public var Multiply:int;
 }

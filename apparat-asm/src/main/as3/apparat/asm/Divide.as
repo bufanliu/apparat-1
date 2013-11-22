@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Divide:int;
+		public var Divide:int;
 }

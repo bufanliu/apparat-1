@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Dup:int;
+		public var Dup:int;
 }

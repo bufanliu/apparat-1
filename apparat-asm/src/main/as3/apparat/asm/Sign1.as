@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Sign1:int;
+		public var Sign1:int;
 }

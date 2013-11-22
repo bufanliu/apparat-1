@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const Negate:int;
+		public var Negate:int;
 }

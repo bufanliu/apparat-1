@@ -20,5 +20,5 @@
  */
 
 package apparat.asm {
-		public const PushTrue:int;
+		public var PushTrue:int;
 }
