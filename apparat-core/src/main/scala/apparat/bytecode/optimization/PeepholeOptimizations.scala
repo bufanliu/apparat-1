@@ -24,49 +24,137 @@ import apparat.bytecode.combinator.BytecodeChains._
 import apparat.bytecode.combinator._
 import apparat.bytecode.operations._
 import apparat.bytecode.Bytecode
+import apparat.abc.AbcQName
 
 object PeepholeOptimizations extends (Bytecode => Boolean) {
-	/*def apply(bytecode: Bytecode) = {
-		bytecode rewrite whileLoop
-		bytecode rewrite getLex
-		bytecode rewrite unnecessaryIntCast
-		bytecode rewrite ifFalse
-		bytecode rewrite ifTrue
-		bytecode
-	}*/
+  /*def apply(bytecode: Bytecode) = {
+    bytecode rewrite whileLoop
+    bytecode rewrite getLex
+    bytecode rewrite unnecessaryIntCast
+    bytecode rewrite ifFalse
+    bytecode rewrite ifTrue
+    bytecode
+  }*/
 
-	def apply(bytecode: Bytecode): Boolean = {
-		var source = bytecode.ops
-		var target = List.empty[AbstractOp]
-		val n = source.length
-		var modified = false
-		val markers = bytecode.markers
-		var i = 0
+  @inline def replace_getlocal0(macroName: AbcQName, bytecode: Bytecode) {
+    /**
+     * @author Patrick Le Clec'h
+     *         rewrite some call that are made by asc2
+     *         Macro function are call with GetLocal(0) instead of GetLex(..)
+     *
+     */
 
-		@inline def nextOp(): Unit = {
-			i += 1
-			source = source.tail
-		}
+    val tf_ungetlocal0 = new TransformTool(bytecode) {
+      override def onNext() = {
+        ops.head match {
+          case call@CallPropVoid(aName, n) => {
+            unwindParameterStack(-n)
+            parameters match {
+              case GetLocal(0) :: xs => {
+                replace(parameters.head, GetLex(macroName))
+                parameters = xs
+              }
+              case _ =>
+            }
+          }
+          case call@CallProperty(aName, n) => {
+            unwindParameterStack(-n)
+            parameters match {
+              case GetLocal(0) :: xs => {
+                replace(parameters.head, GetLex(macroName))
+                parameters = xs
+                ops.tail match {
+                  case Pop() :: xx => {
+                    remove(ops.tail.head)
+                    ops = ops.tail
+                    replace(call, CallPropVoid(aName, n))
+                  }
+                  case _ => {
+                    addToParameter(PushByte(1))
+                  }
+                }
+              }
+              case _ =>
+            }
+          }
+          case _ => addToParameter()
+        }
+      }
+    }
+    tf_ungetlocal0()
+  }
 
-		while(i < n) {
-			val op = source.head
-			val opCode = op.opCode
-			if (Op.nop == opCode) {
-				val tail = source.tail
-				if (tail.nonEmpty) {
-					if (markers.hasMarkerFor(tail.head)) {
-						// TODO fold label
-						// so for now we did not remove the Nop
-						// if tail.head has already a marker
-						// L0:Nop
-						// L1:XXX
-						target = op :: target
-					} else {
-						markers.forwardMarker(op, tail.head)
-						modified = true
-					}
-				}
-			} /*else if (Op.jump == opCode) {
+  def replace_getlex_call(bytecode: Bytecode): Boolean = {
+    /**
+     * @author Patrick Le Clec'h
+     *         rewrite some call that are made by asc2 and that are really slow and mess the rest of the transformation step
+     *         asc2 rewrite call as GetLex GetGlobalScope ... Call(n)
+     *
+     */
+    val tf = new TransformTool(bytecode) {
+      override def onNext() = {
+        ops.head match {
+          case call@Call(n) => {
+            unwindParameterStack(-n)
+            parameters match {
+              case GetGlobalScope() :: GetLex(aName) :: xs => {
+                replace(parameters.head, Nop())
+                replace(parameters.tail.head, FindPropStrict(aName))
+                parameters = xs
+                ops.tail match {
+                  case Pop() :: xx => {
+                    remove(ops.tail.head)
+                    ops = ops.tail
+                    replace(call, CallPropVoid(aName, n))
+                  }
+                  case _ => {
+                    addToParameter(PushByte(1))
+                    replace(call, CallProperty(aName, n))
+                  }
+                }
+              }
+              case _ =>
+            }
+          }
+          case _ => addToParameter()
+        }
+      }
+    }
+    tf()
+  }
+
+  def apply(bytecode: Bytecode): Boolean = {
+    var source = bytecode.ops
+    var target = List.empty[AbstractOp]
+    val n = source.length
+    var modified = false
+    val markers = bytecode.markers
+    var i = 0
+
+    @inline def nextOp(): Unit = {
+      i += 1
+      source = source.tail
+    }
+
+    while (i < n) {
+      val op = source.head
+      val opCode = op.opCode
+      if (Op.nop == opCode) {
+        val tail = source.tail
+        if (tail.nonEmpty) {
+          if (markers.hasMarkerFor(tail.head)) {
+            // TODO fold label
+            // so for now we did not remove the Nop
+            // if tail.head has already a marker
+            // L0:Nop
+            // L1:XXX
+            target = op :: target
+          } else {
+            markers.forwardMarker(op, tail.head)
+            modified = true
+          }
+        }
+      } /*else if (Op.jump == opCode) {
 				val tail = source.tail
 				if (tail.nonEmpty){
 					op.asInstanceOf[Jump].marker.op match {
@@ -112,23 +200,24 @@ object PeepholeOptimizations extends (Bytecode => Boolean) {
 				} else {
 					target = op :: target
 				}
-			}*/ else if(Op.findpropstrict == opCode) {
-				if(source.tail.head.opCode == Op.getproperty) {
-					val getProperty = source.tail.head.asInstanceOf[GetProperty]
+			}*/
+      else if (Op.findpropstrict == opCode) {
+        if (source.tail.head.opCode == Op.getproperty) {
+          val getProperty = source.tail.head.asInstanceOf[GetProperty]
 
-					if(getProperty.property == op.asInstanceOf[FindPropStrict].property) {
-						target = GetLex(getProperty.property) :: target
-						markers.forwardMarker(op, target.head)
-						modified = true
-					} else {
-						target = getProperty :: op :: target
-					}
+          if (getProperty.property == op.asInstanceOf[FindPropStrict].property) {
+            target = GetLex(getProperty.property) :: target
+            markers.forwardMarker(op, target.head)
+            modified = true
+          } else {
+            target = getProperty :: op :: target
+          }
 
-					nextOp()
-				} else {
-					target = op :: target
-				}
-			}/* else if(Op.add_i == opCode ||
+          nextOp()
+        } else {
+          target = op :: target
+        }
+      } /* else if(Op.add_i == opCode ||
 				Op.subtract_i == opCode ||
 				Op.multiply_i == opCode) {
 				if(source.tail.head.opCode == Op.convert_i) {
@@ -181,62 +270,71 @@ object PeepholeOptimizations extends (Bytecode => Boolean) {
 				} else {
 					target = op :: target
 				}
-			}*/ else {
-				target = op :: target
-			}
+			}*/
+      else {
+        target = op :: target
+      }
 
-			nextOp()
-		}
+      nextOp()
+    }
 
-		if(modified) {
-			bytecode.ops = target.reverse
-		}
+    if (modified) {
+      bytecode.ops = target.reverse
+    }
 
-		modified
-	}
+    modified
+  }
 
-	lazy val ifFalse = (PushFalse() ~ partial {case ifFalse: IfFalse => ifFalse}) ^^ {
-		case PushFalse() ~ IfFalse(marker) => Jump(marker) :: Nil
-		case _ => error("Unreachable code.")
-	}
+  lazy val ifFalse = (PushFalse() ~ partial {
+    case ifFalse: IfFalse => ifFalse
+  }) ^^ {
+    case PushFalse() ~ IfFalse(marker) => Jump(marker) :: Nil
+    case _ => error("Unreachable code.")
+  }
 
-	lazy val ifTrue = (PushTrue() ~ partial {case ifTrue: IfTrue => ifTrue}) ^^ {
-		case PushTrue() ~ IfTrue(marker) => Jump(marker) :: Nil
-		case _ => error("Unreachable code.")
-	}
+  lazy val ifTrue = (PushTrue() ~ partial {
+    case ifTrue: IfTrue => ifTrue
+  }) ^^ {
+    case PushTrue() ~ IfTrue(marker) => Jump(marker) :: Nil
+    case _ => error("Unreachable code.")
+  }
 
-	lazy val whileLoop = (
-		partial {
-			case getLocal: GetLocal => getLocal
-		} ~ (IncrementInt() | DecrementInt()) ~ Dup() ~ ConvertInt() ~
-		partial {
-			case setLocal: SetLocal => setLocal
-		}
-	) ^^ {
-		case GetLocal(x) ~ op ~ Dup() ~ ConvertInt() ~ SetLocal(y) if x == y => {
-			(op match {
-				case DecrementInt() => DecLocalInt(x)
-				case IncrementInt() => IncLocalInt(x)
-				case _ => error("Unreachable code.")
-			}) :: GetLocal(x) :: Nil
-		}
-		case GetLocal(x) ~ op ~ Dup() ~ ConvertInt() ~ SetLocal(y) => {
-			GetLocal(x) :: op :: Dup() :: ConvertInt() :: SetLocal(y) :: Nil
-		}
-		case _ => error("Unreachable code.")
-	}
+  lazy val whileLoop = (
+    partial {
+      case getLocal: GetLocal => getLocal
+    } ~ (IncrementInt() | DecrementInt()) ~ Dup() ~ ConvertInt() ~
+      partial {
+        case setLocal: SetLocal => setLocal
+      }
+    ) ^^ {
+    case GetLocal(x) ~ op ~ Dup() ~ ConvertInt() ~ SetLocal(y) if x == y => {
+      (op match {
+        case DecrementInt() => DecLocalInt(x)
+        case IncrementInt() => IncLocalInt(x)
+        case _ => error("Unreachable code.")
+      }) :: GetLocal(x) :: Nil
+    }
+    case GetLocal(x) ~ op ~ Dup() ~ ConvertInt() ~ SetLocal(y) => {
+      GetLocal(x) :: op :: Dup() :: ConvertInt() :: SetLocal(y) :: Nil
+    }
+    case _ => error("Unreachable code.")
+  }
 
-	lazy val getLex = (
-		partial {case findPropStrict: FindPropStrict => findPropStrict} ~
-				partial {case getProperty: GetProperty => getProperty}
-	) ^^ {
-		case FindPropStrict(x) ~ GetProperty(y) if x == y => GetLex(x) :: Nil
-		case FindPropStrict(x) ~ GetProperty(y) => FindPropStrict(x) :: GetProperty(y) :: Nil
-		case _ => error("Unreachable code.")
-	}
+  lazy val getLex = (
+    partial {
+      case findPropStrict: FindPropStrict => findPropStrict
+    } ~
+      partial {
+        case getProperty: GetProperty => getProperty
+      }
+    ) ^^ {
+    case FindPropStrict(x) ~ GetProperty(y) if x == y => GetLex(x) :: Nil
+    case FindPropStrict(x) ~ GetProperty(y) => FindPropStrict(x) :: GetProperty(y) :: Nil
+    case _ => error("Unreachable code.")
+  }
 
-	lazy val unnecessaryIntCast = ((AddInt() | SubtractInt() | MultiplyInt()) ~ ConvertInt()) ^^ {
-		case x ~ ConvertInt() => x :: Nil
-		case _ => error("Unreachable code.")
-	}
+  lazy val unnecessaryIntCast = ((AddInt() | SubtractInt() | MultiplyInt()) ~ ConvertInt()) ^^ {
+    case x ~ ConvertInt() => x :: Nil
+    case _ => error("Unreachable code.")
+  }
 }

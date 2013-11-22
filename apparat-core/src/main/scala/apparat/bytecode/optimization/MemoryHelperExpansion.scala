@@ -88,7 +88,7 @@ class MemoryHelperExpansion(abcs: List[Abc]) extends SimpleLog {
 
   lazy val structures: Map[AbcName, AbcNominalType] = {
     var map = Map.empty[AbcName, AbcNominalType]
-    for (abc <- abcs; nominal <- abc.types if (!nominal.inst.isInterface)) {
+    for (abc <- abcs; nominal <- abc.types if !nominal.inst.isInterface) {
       val baseName = nominal.inst.base getOrElse AbcConstantPool.EMPTY_NAME
       if ((baseName == ApparatStructure) || map.contains(baseName))
         map = map.updated(nominal.inst.name, nominal)
@@ -260,14 +260,14 @@ class MemoryHelperExpansion(abcs: List[Abc]) extends SimpleLog {
             removePop = false
             replaceDup = false
           }
-          case Pop() if (removePop) => {
+          case Pop() if removePop => {
             removePop = false
             replaceDup = false
             duplicateGetLocal = false
             removes = op :: removes
             replacements = replacements.updated(callToBeReplaced, List(replaceCallWith))
           }
-          case SetLocal(register) if (replaceDup) => {
+          case SetLocal(register) if replaceDup => {
             replaceDup = false
             removePop = false
             duplicateGetLocal = false
@@ -284,8 +284,9 @@ class MemoryHelperExpansion(abcs: List[Abc]) extends SimpleLog {
 
       if (removes.nonEmpty || replacements.nonEmpty) {
         removes foreach {
-          bytecode remove _
+          bytecode.remove
         }
+
         replacements.iterator foreach {
           x => bytecode.replace(x._1, x._2)
         }
@@ -356,10 +357,10 @@ class MemoryHelperExpansion(abcs: List[Abc]) extends SimpleLog {
         val op = parameters.head
         parameters = parameters.tail
         if (markers.hasMarkerFor(op)) {
-          val i = parameters.indexWhere(p => p match {
-            case m: OpWithMarker if (m.marker.op.get == op) => true
+          val i = parameters.indexWhere {
+            case m: OpWithMarker if m.marker.op.get == op => true
             case _ => false
-          })
+          }
           if (i >= 0)
             parameters = parameters.drop(i + 1)
         }
@@ -371,18 +372,17 @@ class MemoryHelperExpansion(abcs: List[Abc]) extends SimpleLog {
       if ((depth < 0) && parameters.nonEmpty) {
         val op = parameters.head
         parameters = parameters.tail
-        val newSaved = (
-          if (markers.hasMarkerFor(op)) {
-            val i = parameters.indexWhere(p => p match {
-              case m: OpWithMarker if (m.marker.op.get == op) => true
-              case _ => false
-            })
-            if (i >= 0) {
-              val newSaved = parameters.take(i + 1).reverse ::: saved
-              parameters = parameters.drop(i + 1)
-              newSaved
-            } else saved
-          } else saved)
+        val newSaved = if (markers.hasMarkerFor(op)) {
+          val i = parameters.indexWhere {
+            case m: OpWithMarker if m.marker.op.get == op => true
+            case _ => false
+          }
+          if (i >= 0) {
+            val newSaved = parameters.take(i + 1).reverse ::: saved
+            parameters = parameters.drop(i + 1)
+            newSaved
+          } else saved
+        } else saved
         unwindAndSaveParameterStack(depth + op.operandDelta, op, op :: newSaved)
       } else saved
     }
@@ -421,701 +421,702 @@ class MemoryHelperExpansion(abcs: List[Abc]) extends SimpleLog {
       castIsWaitingForRead = false
     }
 
-    for (op <- bytecode.ops) {
-      @inline def pushOp() {
-        if (balance > 0) parameters = op :: parameters
-      }
+    bytecode.ops.foreach {
+      op =>
+        @inline def pushOp() {
+          if (balance > 0) parameters = op :: parameters
+        }
 
-      op match {
-        case Coerce(aName) => {
-          if (optimisation == Optimisation.RemoveCoerce)
-            removes = op :: removes
-          else {
+        op match {
+          case Coerce(aName) => {
+            if (optimisation == Optimisation.RemoveCoerce)
+              removes = op :: removes
+            else {
+              preCheck()
+              pushOp()
+            }
+            clearOptimisation()
+          }
+          case ConvertInt() => {
             preCheck()
-            pushOp()
+
+            if (optimisation == Optimisation.RemoveConvertInt)
+              removes = op :: removes
+            else
+              pushOp()
+            clearOptimisation()
           }
-          clearOptimisation()
-        }
-        case ConvertInt() => {
-          preCheck()
-
-          if (optimisation == Optimisation.RemoveConvertInt)
-            removes = op :: removes
-          else
-            pushOp()
-          clearOptimisation()
-        }
-        case DebugLine(line) => {
-          lineNum = line
-          clearOptimisation()
-        }
-        case FindPropStrict(aName) => {
-          preCheck()
-
-          clearOptimisation()
-          clearCast()
-
-          aName match {
-            case MapName => {
-              balance += 1
-              removes = op :: removes
-            }
-            case SizeOfName => {
-              balance += 1
-              removes = op :: removes
-            }
-            case _ => {
-              structureMap.get(aName) match {
-                case Some(struct) => {
-                  balance += 1
-                  removes = op :: removes
-                }
-                case _ => pushOp()
-              }
-            }
+          case DebugLine(line) => {
+            lineNum = line
+            clearOptimisation()
           }
-        }
-        case CallProperty(aName, argCount) => {
-          preCheck()
+          case FindPropStrict(aName) => {
+            preCheck()
 
-          clearOptimisation()
-          clearCast()
+            clearOptimisation()
+            clearCast()
 
-          aName match {
-            case MapName if (argCount == 2) => {
-              if (balance <= 0) throwError("Invalid CallProperty " + aName)
-              removes = op :: removes
-              balance -= 1
-              optimisation = Optimisation.RemoveCoerce
-              setStructure = true
-              parameters.head match {
-                case gl@GetLex(sName) if (sName.kind == AbcNameKind.QName) => {
-                  currentStructure = structureMap.get(sName.asInstanceOf[AbcQName])
-                  if (currentStructure == None) throwError("map is expecting a Class of type Structure as second arguments")
-                  removes = gl :: removes
-                  unwindParameterStack(op.operandDelta)
-                  parameters = PushByte(0) :: parameters
-                }
-                case _ => throwError("map is expecting a Class of type Structure as second arguments")
+            aName match {
+              case MapName => {
+                balance += 1
+                removes = op :: removes
               }
-            }
-            case SizeOfName if (argCount == 1) => {
-              if (balance <= 0) throwError("Invalid CallProperty " + aName)
-              removes = op :: removes
-              balance -= 1
-              parameters.head match {
-                case gl@GetLex(sName) if (sName.kind == AbcNameKind.QName) => {
-                  structureMap.get(sName.asInstanceOf[AbcQName]) match {
-                    case Some(struct) => {
-                      val field = struct.fields.head
-                      val size = field.position + sizeOf(field.`type`)
-                      var args = List.empty[AbstractOp]
-                      args = getPushOpFromSize(size) :: args
-                      replacements = replacements.updated(gl, args.reverse)
-                      unwindParameterStack(op.operandDelta)
-                      parameters = PushByte(0) :: parameters
-                    }
-                    case _ => throwError("sizeOf is expecting a Class of type Structure as argument")
+              case SizeOfName => {
+                balance += 1
+                removes = op :: removes
+              }
+              case _ => {
+                structureMap.get(aName) match {
+                  case Some(struct) => {
+                    balance += 1
+                    removes = op :: removes
                   }
-                }
-                case _ => throwError("sizeOf is expecting a Class of type Structure as argument")
-              }
-            }
-            case InternalPtrName if (argCount == 0 && (balance > 0)) => {
-              preCheck()
-              optimisation = Optimisation.RemoveConvertInt
-              //              unwindParameterStack(op.operandDelta + 1)
-              //              parameters.head match {
-              unwindParameterStack(-op.popOperands) match {
-                case gl@GetLocal(register) if (registerMap.contains(register)) => {
-                  removes = gl :: removes
-                  val memAlias = registerMap.get(register).get
-                  //                  val structInfo = memAlias.structureInfo
-                  //                  val field = structInfo.fields.head
-                  //                  val size = field.position + sizeOf(field.`type`)
-                  var args = List.empty[AbstractOp]
-                  args = GetLocal(memAlias.ptrRegister) :: args
-                  replacements = replacements.updated(op, args.reverse)
-                  balance -= 1
-                  //                  parameters = parameters.tail
-                  parameters = PushByte(0) :: parameters
-                }
-                case _ => throwError("internalPtr called on unmapped Structure")
-              }
-            }
-            case _ => {
-              preCheck()
-              structureMap.get(aName) match {
-                case Some(struct) => {
-                  if (balance <= 0) throwError("Invalid cast " + aName)
-                  if (argCount != 1) throwError("Invalid argument(s) for cast " + aName)
-                  removes = op :: removes
-                  parameters.head match {
-                    case gl@GetLocal(register) if (registerMap.contains(register)) => {
-                      if (castRegister == None) balance -= 1
-                      castIsWaitingForRead = true
-                      castIsWaitingForWrite = true
-                      unwindParameterStack(-op.popOperands)
-                      removes = op :: gl :: removes
-                      castRegister = Some(CastRegister(register, aName))
-                      //											balance -= 1
-                      parameters = PushByte(0) :: parameters
-                    }
-                    case _ => throwError("cast " + aName + " called on unmapped Structure")
-                  }
-                }
-                case _ => {
-                  unwindParameterStack(-op.popOperands)
-                  parameters = PushByte(0) :: parameters
+                  case _ => pushOp()
                 }
               }
             }
           }
-        }
-        case CallPropVoid(aName, argCount) => {
-          preCheck()
+          case CallProperty(aName, argCount) => {
+            preCheck()
 
-          clearOptimisation()
-          clearCast()
+            clearOptimisation()
+            clearCast()
 
-          aName match {
-            case OffsetToName if (argCount == 1 && (balance > 0) && parameters.nonEmpty) => {
-              preCheck()
-              optimisation = Optimisation.RemoveConvertInt
-              unwindParameterStack(op.operandDelta) match {
-                case gl@GetLocal(register) if (registerMap.contains(register)) => {
-                  removes = gl :: removes
-                  val memAlias = registerMap.get(register).get
-                  //                  val structInfo = memAlias.structureInfo
-                  //                  val field = structInfo.fields.head
-                  //                  val size = field.position + sizeOf(field.`type`)
-                  var args = List.empty[AbstractOp]
-                  args = SetLocal(memAlias.ptrRegister) :: args
-                  replacements = replacements.updated(op, args.reverse)
-                  balance -= 1
+            aName match {
+              case MapName if argCount == 2 => {
+                if (balance <= 0) throwError("Invalid CallProperty " + aName)
+                removes = op :: removes
+                balance -= 1
+                optimisation = Optimisation.RemoveCoerce
+                setStructure = true
+                parameters.head match {
+                  case gl@GetLex(sName) if sName.kind == AbcNameKind.QName => {
+                    currentStructure = structureMap.get(sName.asInstanceOf[AbcQName])
+                    if (currentStructure == None) throwError("map is expecting a Class of type Structure as second arguments")
+                    removes = gl :: removes
+                    unwindParameterStack(op.operandDelta)
+                    parameters = PushByte(0) :: parameters
+                  }
+                  case _ => throwError("map is expecting a Class of type Structure as second arguments")
                 }
-                case _ => throwError("offsetTo called on unmapped Structure")
               }
-            }
-            case SeekToName if (argCount == 1 && (balance > 0) && parameters.nonEmpty) => {
-              preCheck()
-              optimisation = Optimisation.RemoveConvertInt
-
-              val optConst = getIntConstantOnStack()
-
-              unwindParameterStack(op.operandDelta) match {
-                case gl@GetLocal(register) if (registerMap.contains(register)) => {
-                  removes = gl :: removes
-                  val memAlias = registerMap.get(register).get
-                  val structInfo = memAlias.structureInfo
-                  val field = structInfo.fields.head
-                  val size = field.position + sizeOf(field.`type`)
-                  var args = List.empty[AbstractOp]
-                  if (size == 0) {
-                    args = Nop() :: args
-                  } else {
-                    def addMultiply() {
-                      args = getPushOpFromSize(size) :: args
-                      args = MultiplyInt() :: args
-                      args = GetLocal(memAlias.orgPtrRegister) :: args
-                      args = AddInt() :: args
-                    }
-                    def addShift(bitShift: Int) {
-                      args = PushByte(bitShift) :: args
-                      args = ShiftLeft() :: args
-                      args = GetLocal(memAlias.orgPtrRegister) :: args
-                      args = AddInt() :: args
-                    }
-                    optConst match {
-                      case Some((0, `op`)) => {
-                        removes = `op` :: removes
-                        args = GetLocal(memAlias.orgPtrRegister) :: args
-                      }
-                      case Some((1, `op`)) => {
-                        removes = `op` :: removes
+              case SizeOfName if argCount == 1 => {
+                if (balance <= 0) throwError("Invalid CallProperty " + aName)
+                removes = op :: removes
+                balance -= 1
+                parameters.head match {
+                  case gl@GetLex(sName) if sName.kind == AbcNameKind.QName => {
+                    structureMap.get(sName.asInstanceOf[AbcQName]) match {
+                      case Some(struct) => {
+                        val field = struct.fields.head
+                        val size = field.position + sizeOf(field.`type`)
+                        var args = List.empty[AbstractOp]
                         args = getPushOpFromSize(size) :: args
+                        replacements = replacements.updated(gl, args.reverse)
+                        unwindParameterStack(op.operandDelta)
+                        parameters = PushByte(0) :: parameters
+                      }
+                      case _ => throwError("sizeOf is expecting a Class of type Structure as argument")
+                    }
+                  }
+                  case _ => throwError("sizeOf is expecting a Class of type Structure as argument")
+                }
+              }
+              case InternalPtrName if argCount == 0 && (balance > 0) => {
+                preCheck()
+                optimisation = Optimisation.RemoveConvertInt
+                //              unwindParameterStack(op.operandDelta + 1)
+                //              parameters.head match {
+                unwindParameterStack(-op.popOperands) match {
+                  case gl@GetLocal(register) if registerMap.contains(register) => {
+                    removes = gl :: removes
+                    val memAlias = registerMap.get(register).get
+                    //                  val structInfo = memAlias.structureInfo
+                    //                  val field = structInfo.fields.head
+                    //                  val size = field.position + sizeOf(field.`type`)
+                    var args = List.empty[AbstractOp]
+                    args = GetLocal(memAlias.ptrRegister) :: args
+                    replacements = replacements.updated(op, args.reverse)
+                    balance -= 1
+                    //                  parameters = parameters.tail
+                    parameters = PushByte(0) :: parameters
+                  }
+                  case _ => throwError("internalPtr called on unmapped Structure")
+                }
+              }
+              case _ => {
+                preCheck()
+                structureMap.get(aName) match {
+                  case Some(struct) => {
+                    if (balance <= 0) throwError("Invalid cast " + aName)
+                    if (argCount != 1) throwError("Invalid argument(s) for cast " + aName)
+                    removes = op :: removes
+                    parameters.head match {
+                      case gl@GetLocal(register) if registerMap.contains(register) => {
+                        if (castRegister == None) balance -= 1
+                        castIsWaitingForRead = true
+                        castIsWaitingForWrite = true
+                        unwindParameterStack(-op.popOperands)
+                        removes = op :: gl :: removes
+                        castRegister = Some(CastRegister(register, aName))
+                        //											balance -= 1
+                        parameters = PushByte(0) :: parameters
+                      }
+                      case _ => throwError("cast " + aName + " called on unmapped Structure")
+                    }
+                  }
+                  case _ => {
+                    unwindParameterStack(-op.popOperands)
+                    parameters = PushByte(0) :: parameters
+                  }
+                }
+              }
+            }
+          }
+          case CallPropVoid(aName, argCount) => {
+            preCheck()
+
+            clearOptimisation()
+            clearCast()
+
+            aName match {
+              case OffsetToName if argCount == 1 && (balance > 0) && parameters.nonEmpty => {
+                preCheck()
+                optimisation = Optimisation.RemoveConvertInt
+                unwindParameterStack(op.operandDelta) match {
+                  case gl@GetLocal(register) if registerMap.contains(register) => {
+                    removes = gl :: removes
+                    val memAlias = registerMap.get(register).get
+                    //                  val structInfo = memAlias.structureInfo
+                    //                  val field = structInfo.fields.head
+                    //                  val size = field.position + sizeOf(field.`type`)
+                    var args = List.empty[AbstractOp]
+                    args = SetLocal(memAlias.ptrRegister) :: args
+                    replacements = replacements.updated(op, args.reverse)
+                    balance -= 1
+                  }
+                  case _ => throwError("offsetTo called on unmapped Structure")
+                }
+              }
+              case SeekToName if argCount == 1 && (balance > 0) && parameters.nonEmpty => {
+                preCheck()
+                optimisation = Optimisation.RemoveConvertInt
+
+                val optConst = getIntConstantOnStack()
+
+                unwindParameterStack(op.operandDelta) match {
+                  case gl@GetLocal(register) if registerMap.contains(register) => {
+                    removes = gl :: removes
+                    val memAlias = registerMap.get(register).get
+                    val structInfo = memAlias.structureInfo
+                    val field = structInfo.fields.head
+                    val size = field.position + sizeOf(field.`type`)
+                    var args = List.empty[AbstractOp]
+                    if (size == 0) {
+                      args = Nop() :: args
+                    } else {
+                      def addMultiply() {
+                        args = getPushOpFromSize(size) :: args
+                        args = MultiplyInt() :: args
                         args = GetLocal(memAlias.orgPtrRegister) :: args
                         args = AddInt() :: args
                       }
-                      case Some((x, `op`)) => {
-                        getPowerOf2(size) match {
-                          case 0 => {
-                            getPowerOf2(x) match {
-                              case 0 => addMultiply()
-                              case bc@_ => {
-                                removes = `op` :: removes
-                                args = getPushOpFromSize(size) :: args
-                                args = PushByte(bc) :: args
-                                args = ShiftLeft() :: args
-                                args = GetLocal(memAlias.orgPtrRegister) :: args
-                                args = AddInt() :: args
+                      def addShift(bitShift: Int) {
+                        args = PushByte(bitShift) :: args
+                        args = ShiftLeft() :: args
+                        args = GetLocal(memAlias.orgPtrRegister) :: args
+                        args = AddInt() :: args
+                      }
+                      optConst match {
+                        case Some((0, `op`)) => {
+                          removes = `op` :: removes
+                          args = GetLocal(memAlias.orgPtrRegister) :: args
+                        }
+                        case Some((1, `op`)) => {
+                          removes = `op` :: removes
+                          args = getPushOpFromSize(size) :: args
+                          args = GetLocal(memAlias.orgPtrRegister) :: args
+                          args = AddInt() :: args
+                        }
+                        case Some((x, `op`)) => {
+                          getPowerOf2(size) match {
+                            case 0 => {
+                              getPowerOf2(x) match {
+                                case 0 => addMultiply()
+                                case bc@_ => {
+                                  removes = `op` :: removes
+                                  args = getPushOpFromSize(size) :: args
+                                  args = PushByte(bc) :: args
+                                  args = ShiftLeft() :: args
+                                  args = GetLocal(memAlias.orgPtrRegister) :: args
+                                  args = AddInt() :: args
+                                }
                               }
                             }
+                            case bc@_ => addShift(bc)
                           }
-                          case bc@_ => addShift(bc)
+                        }
+                        case _ => {
+                          getPowerOf2(size) match {
+                            case 0 => addMultiply()
+                            case bc@_ => addShift(bc)
+                          }
                         }
                       }
-                      case _ => {
-                        getPowerOf2(size) match {
-                          case 0 => addMultiply()
-                          case bc@_ => addShift(bc)
-                        }
-                      }
+                      args = SetLocal(memAlias.ptrRegister) :: args
                     }
-                    args = SetLocal(memAlias.ptrRegister) :: args
+                    replacements = replacements.updated(op, args.reverse)
+                    balance -= 1
                   }
-                  replacements = replacements.updated(op, args.reverse)
-                  balance -= 1
+                  case _ => throwError("seekTo called on unmapped Structure")
                 }
-                case _ => throwError("seekTo called on unmapped Structure")
               }
-            }
-            case SeekByName if (argCount == 1 && (balance > 0) && parameters.nonEmpty) => {
-              preCheck()
-              optimisation = Optimisation.RemoveConvertInt
+              case SeekByName if argCount == 1 && (balance > 0) && parameters.nonEmpty => {
+                preCheck()
+                optimisation = Optimisation.RemoveConvertInt
 
-              val optConst = getIntConstantOnStack()
+                val optConst = getIntConstantOnStack()
 
-              unwindParameterStack(op.operandDelta) match {
-                case gl@GetLocal(register) if (registerMap.contains(register)) => {
-                  removes = gl :: removes
-                  val memAlias = registerMap.get(register).get
-                  val structInfo = memAlias.structureInfo
-                  val field = structInfo.fields.head
-                  val size = field.position + sizeOf(field.`type`)
-                  var args = List.empty[AbstractOp]
-                  if (size == 0) {
-                    args = Nop() :: args
-                  } else {
-                    def addMultiply() {
-                      args = getPushOpFromSize(size) :: args
-                      args = MultiplyInt() :: args
-                      args = GetLocal(memAlias.ptrRegister) :: args
-                      args = AddInt() :: args
-                    }
-                    def addShift(bitShift: Int) {
-                      args = PushByte(bitShift) :: args
-                      args = ShiftLeft() :: args
-                      args = GetLocal(memAlias.ptrRegister) :: args
-                      args = AddInt() :: args
-                    }
-                    optConst match {
-                      case Some((0, `op`)) => {
-                        removes = `op` :: removes
-                        args = GetLocal(memAlias.ptrRegister) :: args
-                      }
-                      case Some((1, `op`)) => {
-                        removes = `op` :: removes
+                unwindParameterStack(op.operandDelta) match {
+                  case gl@GetLocal(register) if registerMap.contains(register) => {
+                    removes = gl :: removes
+                    val memAlias = registerMap.get(register).get
+                    val structInfo = memAlias.structureInfo
+                    val field = structInfo.fields.head
+                    val size = field.position + sizeOf(field.`type`)
+                    var args = List.empty[AbstractOp]
+                    if (size == 0) {
+                      args = Nop() :: args
+                    } else {
+                      def addMultiply() {
                         args = getPushOpFromSize(size) :: args
+                        args = MultiplyInt() :: args
                         args = GetLocal(memAlias.ptrRegister) :: args
                         args = AddInt() :: args
                       }
-                      case Some((x, `op`)) => {
-                        getPowerOf2(size) match {
-                          case 0 => {
-                            getPowerOf2(x) match {
-                              case 0 => addMultiply()
-                              case bc@_ => {
-                                removes = `op` :: removes
-                                args = getPushOpFromSize(size) :: args
-                                args = PushByte(bc) :: args
-                                args = ShiftLeft() :: args
-                                args = GetLocal(memAlias.ptrRegister) :: args
-                                args = AddInt() :: args
+                      def addShift(bitShift: Int) {
+                        args = PushByte(bitShift) :: args
+                        args = ShiftLeft() :: args
+                        args = GetLocal(memAlias.ptrRegister) :: args
+                        args = AddInt() :: args
+                      }
+                      optConst match {
+                        case Some((0, `op`)) => {
+                          removes = `op` :: removes
+                          args = GetLocal(memAlias.ptrRegister) :: args
+                        }
+                        case Some((1, `op`)) => {
+                          removes = `op` :: removes
+                          args = getPushOpFromSize(size) :: args
+                          args = GetLocal(memAlias.ptrRegister) :: args
+                          args = AddInt() :: args
+                        }
+                        case Some((x, `op`)) => {
+                          getPowerOf2(size) match {
+                            case 0 => {
+                              getPowerOf2(x) match {
+                                case 0 => addMultiply()
+                                case bc@_ => {
+                                  removes = `op` :: removes
+                                  args = getPushOpFromSize(size) :: args
+                                  args = PushByte(bc) :: args
+                                  args = ShiftLeft() :: args
+                                  args = GetLocal(memAlias.ptrRegister) :: args
+                                  args = AddInt() :: args
+                                }
                               }
                             }
+                            case bc@_ => addShift(bc)
                           }
-                          case bc@_ => addShift(bc)
+                        }
+                        case _ => {
+                          getPowerOf2(size) match {
+                            case 0 => addMultiply()
+                            case bc@_ => addShift(bc)
+                          }
                         }
                       }
-                      case _ => {
-                        getPowerOf2(size) match {
-                          case 0 => addMultiply()
-                          case bc@_ => addShift(bc)
-                        }
+                      args = SetLocal(memAlias.ptrRegister) :: args
+                    }
+                    replacements = replacements.updated(op, args.reverse)
+                    balance -= 1
+                  }
+                  case _ => throwError("seekBy called on unmapped Structure")
+                }
+              }
+              case SwapName if argCount == 1 && (balance > 0) && parameters.size == 2 => {
+                preCheck()
+                val p1 = parameters.head
+                parameters = parameters.tail
+                val p2 = parameters.head
+                parameters = parameters.tail
+                p1 match {
+                  case gl1@GetLocal(register1) if registerMap.contains(register1) => {
+                    p2 match {
+                      case gl2@GetLocal(register2) if registerMap.contains(register2) => {
+                        val memAlias1 = registerMap.get(register1).get
+                        val memAlias2 = registerMap.get(register2).get
+                        removes = List(op, gl1, gl2) ::: removes
+                        balance -= 1
+                        registerMap = registerMap.updated(register1, memAlias2)
+                        registerMap = registerMap.updated(register2, memAlias1)
                       }
+                      case _ => throwError("swap expected a Structure as parameter")
                     }
-                    args = SetLocal(memAlias.ptrRegister) :: args
                   }
-                  replacements = replacements.updated(op, args.reverse)
-                  balance -= 1
+                  case _ =>
                 }
-                case _ => throwError("seekBy called on unmapped Structure")
               }
-            }
-            case SwapName if (argCount == 1 && (balance > 0) && parameters.size == 2) => {
-              preCheck()
-              val p1 = parameters.head
-              parameters = parameters.tail
-              val p2 = parameters.head
-              parameters = parameters.tail
-              p1 match {
-                case gl1@GetLocal(register1) if (registerMap.contains(register1)) => {
-                  p2 match {
-                    case gl2@GetLocal(register2) if (registerMap.contains(register2)) => {
-                      val memAlias1 = registerMap.get(register1).get
-                      val memAlias2 = registerMap.get(register2).get
-                      removes = List(op, gl1, gl2) ::: removes
-                      balance -= 1
-                      registerMap = registerMap.updated(register1, memAlias2)
-                      registerMap = registerMap.updated(register2, memAlias1)
-                    }
-                    case _ => throwError("swap expected a Structure as parameter")
-                  }
-                }
-                case _ =>
-              }
-            }
-            case OffsetByName if (argCount == 1 && (balance > 0) && parameters.nonEmpty) => {
-              preCheck()
-              optimisation = Optimisation.RemoveConvertInt
-              unwindParameterStack(op.operandDelta) match {
-                case gl@GetLocal(register) if (registerMap.contains(register)) => {
-                  removes = gl :: removes
-                  val memAlias = registerMap.get(register).get
-                  //                  val structInfo = memAlias.structureInfo
-                  //                  val field = structInfo.fields.head
-                  //                  val size = field.position + sizeOf(field.`type`)
-                  var args = List.empty[AbstractOp]
-                  args = GetLocal(memAlias.ptrRegister) :: args
-                  args = AddInt() :: args
-                  args = SetLocal(memAlias.ptrRegister) :: args
-                  replacements = replacements.updated(op, args.reverse)
-                  balance -= 1
-                  //                  parameters = parameters.tail
-                }
-                case _ => throwError("offsetBy called on unmapped Structure")
-              }
-            }
-            case NextName if (argCount == 0 && (balance > 0) && parameters.nonEmpty) => {
-              preCheck()
-              //              optimisation = Optimisation.RemoveConvertInt
-              unwindParameterStack(op.operandDelta) match {
-                case gl@GetLocal(register) if (registerMap.contains(register)) => {
-                  removes = gl :: removes
-                  val memAlias = registerMap.get(register).get
-                  val structInfo = memAlias.structureInfo
-                  val field = structInfo.fields.head
-                  val size = field.position + sizeOf(field.`type`)
-                  var args = List.empty[AbstractOp]
-                  args = GetLocal(memAlias.ptrRegister) :: args
-                  if (size != 0) {
-                    args = getPushOpFromSize(size) :: args
+              case OffsetByName if argCount == 1 && (balance > 0) && parameters.nonEmpty => {
+                preCheck()
+                optimisation = Optimisation.RemoveConvertInt
+                unwindParameterStack(op.operandDelta) match {
+                  case gl@GetLocal(register) if registerMap.contains(register) => {
+                    removes = gl :: removes
+                    val memAlias = registerMap.get(register).get
+                    //                  val structInfo = memAlias.structureInfo
+                    //                  val field = structInfo.fields.head
+                    //                  val size = field.position + sizeOf(field.`type`)
+                    var args = List.empty[AbstractOp]
+                    args = GetLocal(memAlias.ptrRegister) :: args
                     args = AddInt() :: args
                     args = SetLocal(memAlias.ptrRegister) :: args
+                    replacements = replacements.updated(op, args.reverse)
+                    balance -= 1
+                    //                  parameters = parameters.tail
                   }
-                  replacements = replacements.updated(op, args.reverse)
-                  balance -= 1
+                  case _ => throwError("offsetBy called on unmapped Structure")
                 }
-                case _ => throwError("next called on unmapped Structure")
               }
-            }
-            case PrevName if (argCount == 0 && (balance > 0) && parameters.nonEmpty) => {
-              preCheck()
-              unwindParameterStack(op.operandDelta) match {
-                case gl@GetLocal(register) if (registerMap.contains(register)) => {
-                  removes = gl :: removes
-                  val memAlias = registerMap.get(register).get
-                  val structInfo = memAlias.structureInfo
-                  val field = structInfo.fields.head
-                  val size = field.position + sizeOf(field.`type`)
-                  var args = List.empty[AbstractOp]
-                  args = GetLocal(memAlias.ptrRegister) :: args
-                  if (size != 0) {
-                    args = getPushOpFromSize(size) :: args
-                    args = SubtractInt() :: args
-                    args = SetLocal(memAlias.ptrRegister) :: args
+              case NextName if argCount == 0 && (balance > 0) && parameters.nonEmpty => {
+                preCheck()
+                //              optimisation = Optimisation.RemoveConvertInt
+                unwindParameterStack(op.operandDelta) match {
+                  case gl@GetLocal(register) if registerMap.contains(register) => {
+                    removes = gl :: removes
+                    val memAlias = registerMap.get(register).get
+                    val structInfo = memAlias.structureInfo
+                    val field = structInfo.fields.head
+                    val size = field.position + sizeOf(field.`type`)
+                    var args = List.empty[AbstractOp]
+                    args = GetLocal(memAlias.ptrRegister) :: args
+                    if (size != 0) {
+                      args = getPushOpFromSize(size) :: args
+                      args = AddInt() :: args
+                      args = SetLocal(memAlias.ptrRegister) :: args
+                    }
+                    replacements = replacements.updated(op, args.reverse)
+                    balance -= 1
                   }
-                  replacements = replacements.updated(op, args.reverse)
-                  balance -= 1
+                  case _ => throwError("next called on unmapped Structure")
                 }
-                case _ => throwError("prev called on unmapped Structure")
               }
-            }
-            case _ => {
-              preCheck()
-              pushOp()
+              case PrevName if argCount == 0 && (balance > 0) && parameters.nonEmpty => {
+                preCheck()
+                unwindParameterStack(op.operandDelta) match {
+                  case gl@GetLocal(register) if registerMap.contains(register) => {
+                    removes = gl :: removes
+                    val memAlias = registerMap.get(register).get
+                    val structInfo = memAlias.structureInfo
+                    val field = structInfo.fields.head
+                    val size = field.position + sizeOf(field.`type`)
+                    var args = List.empty[AbstractOp]
+                    args = GetLocal(memAlias.ptrRegister) :: args
+                    if (size != 0) {
+                      args = getPushOpFromSize(size) :: args
+                      args = SubtractInt() :: args
+                      args = SetLocal(memAlias.ptrRegister) :: args
+                    }
+                    replacements = replacements.updated(op, args.reverse)
+                    balance -= 1
+                  }
+                  case _ => throwError("prev called on unmapped Structure")
+                }
+              }
+              case _ => {
+                preCheck()
+                pushOp()
+              }
             }
           }
-        }
-        case GetLocal(register) if (registerMap.contains(register)) => {
-          preCheck()
-          clearOptimisation()
-          clearCast()
-          if (castRegister == None) balance += 1
-          pushOp()
-        }
-        case GetLex(aName) => {
-          preCheck()
+          case GetLocal(register) if registerMap.contains(register) => {
+            preCheck()
+            clearOptimisation()
+            clearCast()
+            if (castRegister == None) balance += 1
+            pushOp()
+          }
+          case GetLex(aName) => {
+            preCheck()
 
-          clearOptimisation()
-          clearCast()
+            clearOptimisation()
+            clearCast()
 
-          aName match {
-            case MapName => {
-              balance += 1
-              removes = op :: removes
-              pushOp()
-            }
-            //            case SizeOfName => {
-            //              balance += 1
-            //              removes = op :: removes
-            //            }
-            case _ => {
-              //              structureMap.get(aName) match {
-              //                case Some(struct) => {
-              //                  balance += 1
-              //                  removes = op :: removes
-              //                }
-              //                case _ => pushOp()
-              pushOp()
+            aName match {
+              case MapName => {
+                balance += 1
+                removes = op :: removes
+                pushOp()
+              }
+              //            case SizeOfName => {
+              //              balance += 1
+              //              removes = op :: removes
               //            }
-            }
-          }
-        }
-        case Call(argCount) if (balance > 0 && parameters.nonEmpty) => {
-          preCheck()
-
-          clearOptimisation()
-          clearCast()
-          val saved = unwindAndSaveParameterStack(-op.popOperands)
-          saved.head match {
-            case GetLex(aName) if ((aName == MapName) && (argCount == 2)) => {
-              removes = op :: removes
-              balance -= 1
-              optimisation = Optimisation.RemoveCoerce
-              setStructure = true
-              saved.last match {
-                case gl@GetLex(sName) if (sName.kind == AbcNameKind.QName) => {
-                  currentStructure = structureMap.get(sName.asInstanceOf[AbcQName])
-                  if (currentStructure == None) throwError("map is expecting a Class of type Structure as second arguments")
-                  removes = gl :: (saved.tail.reverse.drop(2) ::: removes)
-                  parameters = PushByte(0) :: parameters
-                }
-                case _ => throwError("map is expecting a Class of type Structure as second arguments")
+              case _ => {
+                //              structureMap.get(aName) match {
+                //                case Some(struct) => {
+                //                  balance += 1
+                //                  removes = op :: removes
+                //                }
+                //                case _ => pushOp()
+                pushOp()
+                //            }
               }
-
             }
-            case _ => parameters = op :: (saved.reverse ::: parameters)
           }
-        }
-        case GetProperty(aName) if (castRegister != None && castIsWaitingForRead) => {
-          preCheck()
-          castIsWaitingForWrite = false
-          balance -= 1
-          unwindParameterStack(-op.popOperands)
-          val memAlias = registerMap.get(castRegister.get.register).get
-          val structInfo = structureMap.get(castRegister.get.castName).get
+          case Call(argCount) if balance > 0 && parameters.nonEmpty => {
+            preCheck()
 
-          structInfo.fields.find(_.name == aName) match {
-            case Some(field) => {
-              var args = List.empty[AbstractOp]
-              args = GetLocal(memAlias.ptrRegister) :: args
-
-              val size = field.position
-
-              if (size > ((1 << 15) - 1)) {
-                args = PushInt(size) :: args
-                args = AddInt() :: args
-              } else if (size > ((1 << 7) - 1)) {
-                args = PushShort(size) :: args
-                args = AddInt() :: args
-              } else if (size > 0) {
-                args = PushByte(size) :: args
-                args = AddInt() :: args
-              }
-
-              args = {
-                field.`type` match {
-                  case 'float => List(GetFloat())
-                  case 'double => List(GetDouble())
-                  case 'int => List(GetInt())
-                  case 'uint => List(GetInt())
-                  case 'byte => List(GetByte())
-                  case 'short => List(GetShort())
-                  case 'sbyte => List(Sign8(), GetByte())
-                  case 'sshort => List(Sign16(), GetShort())
-                  case _ => throwError("Unknown type : " + field.`type`); List(Nop())
-                }
-              } ::: args
-              replacements = replacements.updated(op, args.reverse)
-              parameters = PushByte(0) :: parameters
-            }
-            case _ => throwError("Can't find field " + aName + " in " + structInfo.name)
-          }
-          clearOptimisation()
-          clearCast()
-        }
-        case GetProperty(aName) if (balance > 0 && parameters.nonEmpty) => {
-          preCheck()
-          clearOptimisation()
-          clearCast()
-          unwindParameterStack(-op.popOperands) match {
-            case gl@GetLocal(register) if (registerMap.contains(register)) => {
-              val memAlias = registerMap.get(register).get
-              val structInfo = memAlias.structureInfo
-              structInfo.fields.find(_.name == aName) match {
-                case Some(field) => {
-                  var args = List.empty[AbstractOp]
-                  args = GetLocal(memAlias.ptrRegister) :: args
-
-                  val size = field.position
-
-                  if (size > ((1 << 15) - 1)) {
-                    args = PushInt(size) :: args
-                    args = AddInt() :: args
-                  } else if (size > ((1 << 7) - 1)) {
-                    args = PushShort(size) :: args
-                    args = AddInt() :: args
-                  } else if (size > 0) {
-                    args = PushByte(size) :: args
-                    args = AddInt() :: args
+            clearOptimisation()
+            clearCast()
+            val saved = unwindAndSaveParameterStack(-op.popOperands)
+            saved.head match {
+              case GetLex(aName) if (aName == MapName) && (argCount == 2) => {
+                removes = op :: removes
+                balance -= 1
+                optimisation = Optimisation.RemoveCoerce
+                setStructure = true
+                saved.last match {
+                  case gl@GetLex(sName) if sName.kind == AbcNameKind.QName => {
+                    currentStructure = structureMap.get(sName.asInstanceOf[AbcQName])
+                    if (currentStructure == None) throwError("map is expecting a Class of type Structure as second arguments")
+                    removes = gl :: (saved.tail.reverse.drop(2) ::: removes)
+                    parameters = PushByte(0) :: parameters
                   }
-
-                  args = {
-                    field.`type` match {
-                      case 'float => List(GetFloat())
-                      case 'double => List(GetDouble())
-                      case 'int => List(GetInt())
-                      case 'uint => List(GetInt())
-                      case 'byte => List(GetByte())
-                      case 'short => List(GetShort())
-                      case 'sbyte => List(Sign8(), GetByte())
-                      case 'sshort => List(Sign16(), GetShort())
-                      case _ => throwError("Unknown type : " + field.`type`); List(Nop())
-                    }
-                  } ::: args
-                  replacements = replacements.updated(op, args.reverse)
-                  balance -= 1
-                  removes = gl :: removes
-                  parameters = PushByte(0) :: parameters
+                  case _ => throwError("map is expecting a Class of type Structure as second arguments")
                 }
-                case _ => throwError("Can't find field " + aName + " in " + structInfo.name)
+
               }
+              case _ => parameters = op :: (saved.reverse ::: parameters)
             }
-            case _ => parameters = PushByte(0) :: parameters //unwindParameterStack(op.operandDelta)
           }
-        }
-        case Kill(register) if (registerMap.contains(register)) => {
-          preCheck()
-          clearOptimisation()
-          clearCast()
-          // TODO remove register alias
-        }
-        case SetLocal(register) if (setStructure) => {
-          clearOptimisation()
-          clearCast()
+          case GetProperty(aName) if castRegister != None && castIsWaitingForRead => {
+            preCheck()
+            castIsWaitingForWrite = false
+            balance -= 1
+            unwindParameterStack(-op.popOperands)
+            val memAlias = registerMap.get(castRegister.get.register).get
+            val structInfo = structureMap.get(castRegister.get.castName).get
 
-          setStructure = false
-          currentStructure match {
-            case Some(structureInfo) => {
-              registerMap = registerMap.updated(register, MemoryAlias(localCount, structureInfo, localCount + 1))
-              replacements = replacements.updated(op, List(Dup(), SetLocal(localCount), SetLocal(localCount + 1)))
-              localCount += 2
-              currentStructure = None
-            }
-            case _ => throwError("map is expecting a Class of type Structure as second arguments")
-          }
-        }
-        case SetProperty(aName) if (balance > 0 && parameters.nonEmpty) => {
-          clearOptimisation()
-          clearCast()
+            structInfo.fields.find(_.name == aName) match {
+              case Some(field) => {
+                var args = List.empty[AbstractOp]
+                args = GetLocal(memAlias.ptrRegister) :: args
 
-          unwindParameterStack(op.operandDelta) match {
-            case gl@GetLocal(register) if (registerMap.contains(register)) => {
-              val memAlias = registerMap.get(register).get
-              val structInfo = memAlias.structureInfo
-              structInfo.fields.find(_.name == aName) match {
-                case Some(field) => {
-                  var args = List.empty[AbstractOp]
-                  args = GetLocal(memAlias.ptrRegister) :: args
-                  val size = field.position
-                  if (size > ((1 << 15) - 1)) {
-                    args = PushInt(size) :: args
-                    args = AddInt() :: args
-                  } else if (size > ((1 << 7) - 1)) {
-                    args = PushShort(size) :: args
-                    args = AddInt() :: args
-                  } else if (size > 0) {
-                    args = PushByte(size) :: args
-                    args = AddInt() :: args
+                val size = field.position
+
+                if (size > ((1 << 15) - 1)) {
+                  args = PushInt(size) :: args
+                  args = AddInt() :: args
+                } else if (size > ((1 << 7) - 1)) {
+                  args = PushShort(size) :: args
+                  args = AddInt() :: args
+                } else if (size > 0) {
+                  args = PushByte(size) :: args
+                  args = AddInt() :: args
+                }
+
+                args = {
+                  field.`type` match {
+                    case 'float => List(GetFloat())
+                    case 'double => List(GetDouble())
+                    case 'int => List(GetInt())
+                    case 'uint => List(GetInt())
+                    case 'byte => List(GetByte())
+                    case 'short => List(GetShort())
+                    case 'sbyte => List(Sign8(), GetByte())
+                    case 'sshort => List(Sign16(), GetShort())
+                    case _ => throwError("Unknown type : " + field.`type`); List(Nop())
                   }
-                  args = {
-                    field.`type` match {
-                      case 'float => SetFloat()
-                      case 'double => SetDouble()
-                      case 'int => SetInt()
-                      case 'uint => SetInt()
-                      case 'byte => SetByte()
-                      case 'short => SetShort()
-                      case 'sbyte => SetByte()
-                      case 'sshort => SetShort()
-                      case _ => throwError("Unknown type : " + field.`type`); Nop()
-                    }
-                  } :: args
-                  replacements = replacements.updated(op, args.reverse)
-                  removes = gl :: removes
-                  balance -= 1
-                }
-                case _ => throwError("Can't find field " + aName + " in " + structInfo.name)
+                } ::: args
+                replacements = replacements.updated(op, args.reverse)
+                parameters = PushByte(0) :: parameters
               }
+              case _ => throwError("Can't find field " + aName + " in " + structInfo.name)
             }
-            case x if (castIsWaitingForWrite && parameters.isEmpty) => {
-              castIsWaitingForWrite = false
-              val memAlias = registerMap.get(castRegister.get.register).get
-              val structInfo = structureMap.get(castRegister.get.castName).get
+            clearOptimisation()
+            clearCast()
+          }
+          case GetProperty(aName) if balance > 0 && parameters.nonEmpty => {
+            preCheck()
+            clearOptimisation()
+            clearCast()
+            unwindParameterStack(-op.popOperands) match {
+              case gl@GetLocal(register) if registerMap.contains(register) => {
+                val memAlias = registerMap.get(register).get
+                val structInfo = memAlias.structureInfo
+                structInfo.fields.find(_.name == aName) match {
+                  case Some(field) => {
+                    var args = List.empty[AbstractOp]
+                    args = GetLocal(memAlias.ptrRegister) :: args
 
-              structInfo.fields.find(_.name == aName) match {
-                case Some(field) => {
-                  var args = List.empty[AbstractOp]
-                  args = GetLocal(memAlias.ptrRegister) :: args
-                  val size = field.position
-                  if (size > ((1 << 15) - 1)) {
-                    args = PushInt(size) :: args
-                    args = AddInt() :: args
-                  } else if (size > ((1 << 7) - 1)) {
-                    args = PushShort(size) :: args
-                    args = AddInt() :: args
-                  } else if (size > 0) {
-                    args = PushByte(size) :: args
-                    args = AddInt() :: args
+                    val size = field.position
+
+                    if (size > ((1 << 15) - 1)) {
+                      args = PushInt(size) :: args
+                      args = AddInt() :: args
+                    } else if (size > ((1 << 7) - 1)) {
+                      args = PushShort(size) :: args
+                      args = AddInt() :: args
+                    } else if (size > 0) {
+                      args = PushByte(size) :: args
+                      args = AddInt() :: args
+                    }
+
+                    args = {
+                      field.`type` match {
+                        case 'float => List(GetFloat())
+                        case 'double => List(GetDouble())
+                        case 'int => List(GetInt())
+                        case 'uint => List(GetInt())
+                        case 'byte => List(GetByte())
+                        case 'short => List(GetShort())
+                        case 'sbyte => List(Sign8(), GetByte())
+                        case 'sshort => List(Sign16(), GetShort())
+                        case _ => throwError("Unknown type : " + field.`type`); List(Nop())
+                      }
+                    } ::: args
+                    replacements = replacements.updated(op, args.reverse)
+                    balance -= 1
+                    removes = gl :: removes
+                    parameters = PushByte(0) :: parameters
                   }
-
-                  args = {
-                    field.`type` match {
-                      case 'float => SetFloat()
-                      case 'double => SetDouble()
-                      case 'int => SetInt()
-                      case 'uint => SetInt()
-                      case 'byte => SetByte()
-                      case 'short => SetShort()
-                      case 'sbyte => SetByte()
-                      case 'sshort => SetShort()
-                      case _ => throwError("Unknown type : " + field.`type`); Nop()
-                    }
-                  } :: args
-                  replacements = replacements.updated(op, args.reverse)
-                  //									removes = gl :: removes
-                  balance -= 1
+                  case _ => throwError("Can't find field " + aName + " in " + structInfo.name)
                 }
-                case _ => unwindParameterStack(op.operandDelta)
               }
-              clearCast()
+              case _ => parameters = PushByte(0) :: parameters //unwindParameterStack(op.operandDelta)
             }
-            case _ => unwindParameterStack(op.operandDelta)
+          }
+          case Kill(register) if registerMap.contains(register) => {
+            preCheck()
+            clearOptimisation()
+            clearCast()
+            // TODO remove register alias
+          }
+          case SetLocal(register) if setStructure => {
+            clearOptimisation()
+            clearCast()
+
+            setStructure = false
+            currentStructure match {
+              case Some(structureInfo) => {
+                registerMap = registerMap.updated(register, MemoryAlias(localCount, structureInfo, localCount + 1))
+                replacements = replacements.updated(op, List(Dup(), SetLocal(localCount), SetLocal(localCount + 1)))
+                localCount += 2
+                currentStructure = None
+              }
+              case _ => throwError("map is expecting a Class of type Structure as second arguments")
+            }
+          }
+          case SetProperty(aName) if balance > 0 && parameters.nonEmpty => {
+            clearOptimisation()
+            clearCast()
+
+            unwindParameterStack(op.operandDelta) match {
+              case gl@GetLocal(register) if registerMap.contains(register) => {
+                val memAlias = registerMap.get(register).get
+                val structInfo = memAlias.structureInfo
+                structInfo.fields.find(_.name == aName) match {
+                  case Some(field) => {
+                    var args = List.empty[AbstractOp]
+                    args = GetLocal(memAlias.ptrRegister) :: args
+                    val size = field.position
+                    if (size > ((1 << 15) - 1)) {
+                      args = PushInt(size) :: args
+                      args = AddInt() :: args
+                    } else if (size > ((1 << 7) - 1)) {
+                      args = PushShort(size) :: args
+                      args = AddInt() :: args
+                    } else if (size > 0) {
+                      args = PushByte(size) :: args
+                      args = AddInt() :: args
+                    }
+                    args = {
+                      field.`type` match {
+                        case 'float => SetFloat()
+                        case 'double => SetDouble()
+                        case 'int => SetInt()
+                        case 'uint => SetInt()
+                        case 'byte => SetByte()
+                        case 'short => SetShort()
+                        case 'sbyte => SetByte()
+                        case 'sshort => SetShort()
+                        case _ => throwError("Unknown type : " + field.`type`); Nop()
+                      }
+                    } :: args
+                    replacements = replacements.updated(op, args.reverse)
+                    removes = gl :: removes
+                    balance -= 1
+                  }
+                  case _ => throwError("Can't find field " + aName + " in " + structInfo.name)
+                }
+              }
+              case x if castIsWaitingForWrite && parameters.isEmpty => {
+                castIsWaitingForWrite = false
+                val memAlias = registerMap.get(castRegister.get.register).get
+                val structInfo = structureMap.get(castRegister.get.castName).get
+
+                structInfo.fields.find(_.name == aName) match {
+                  case Some(field) => {
+                    var args = List.empty[AbstractOp]
+                    args = GetLocal(memAlias.ptrRegister) :: args
+                    val size = field.position
+                    if (size > ((1 << 15) - 1)) {
+                      args = PushInt(size) :: args
+                      args = AddInt() :: args
+                    } else if (size > ((1 << 7) - 1)) {
+                      args = PushShort(size) :: args
+                      args = AddInt() :: args
+                    } else if (size > 0) {
+                      args = PushByte(size) :: args
+                      args = AddInt() :: args
+                    }
+
+                    args = {
+                      field.`type` match {
+                        case 'float => SetFloat()
+                        case 'double => SetDouble()
+                        case 'int => SetInt()
+                        case 'uint => SetInt()
+                        case 'byte => SetByte()
+                        case 'short => SetShort()
+                        case 'sbyte => SetByte()
+                        case 'sshort => SetShort()
+                        case _ => throwError("Unknown type : " + field.`type`); Nop()
+                      }
+                    } :: args
+                    replacements = replacements.updated(op, args.reverse)
+                    //									removes = gl :: removes
+                    balance -= 1
+                  }
+                  case _ => unwindParameterStack(op.operandDelta)
+                }
+                clearCast()
+              }
+              case _ => unwindParameterStack(op.operandDelta)
+            }
+          }
+          case _ => {
+            preCheck()
+            clearOptimisation()
+            clearCast()
+            pushOp()
           }
         }
-        case _ => {
-          preCheck()
-          clearOptimisation()
-          clearCast()
-          pushOp()
-        }
-      }
 
-      if (balance == 0) {
-        parameters = Nil
-      }
+        if (balance == 0) {
+          parameters = Nil
+        }
     }
 
     if (castIsWaitingForWrite) {
@@ -1123,7 +1124,7 @@ class MemoryHelperExpansion(abcs: List[Abc]) extends SimpleLog {
     }
     if (removes.nonEmpty || replacements.nonEmpty) {
       removes foreach {
-        bytecode remove _
+        bytecode.remove
       }
       replacements.iterator foreach {
         x => bytecode.replace(x._1, x._2)

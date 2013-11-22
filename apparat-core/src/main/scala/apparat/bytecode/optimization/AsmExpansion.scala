@@ -18,6 +18,9 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
+/**
+ * @author Patrick Le Clec'h
+ */
 package apparat.bytecode.optimization
 
 import apparat.bytecode.operations._
@@ -31,196 +34,197 @@ import collection.SeqView
 object AsmExpansion {
 	// TODO callMethod,debug,hasNext2,newCatch,newClass,newFunction,pushNamespace
 
-	private val asmNamespace = AbcNamespace(AbcNamespaceKind.Package, Symbol("apparat.asm"))
-	private val __asm = AbcQName('__asm, asmNamespace)
-	private val __maxStack = AbcQName('__maxStack, asmNamespace)
-	private val __dumpAfterASM = AbcQName('__dumpAfterASM, asmNamespace)
-	private val __nakedName = AbcQName('__naked, asmNamespace)
-	private val __as3 = AbcQName('__as3, asmNamespace)
-	private val __cint = AbcQName('__cint, asmNamespace)
-	private val __beginRepeat = AbcQName('__beginRepeat, asmNamespace)
-	private val __endRepeat = AbcQName('__endRepeat, asmNamespace)
+	private val AsmNamespace = AbcNamespace(AbcNamespaceKind.Package, Symbol("apparat.asm"))
+	val __asm = AbcQName('__asm, AsmNamespace)
+	private val __maxStack = AbcQName('__maxStack, AsmNamespace)
+	private val __dumpAfterASM = AbcQName('__dumpAfterASM, AsmNamespace)
+	private val __nakedName = AbcQName('__naked, AsmNamespace)
+	private val __as3 = AbcQName('__as3, AsmNamespace)
+	private val __cint = AbcQName('__cint, AsmNamespace)
+	private val __beginRepeat = AbcQName('__beginRepeat, AsmNamespace)
+	private val __endRepeat = AbcQName('__endRepeat, AsmNamespace)
 
 	private lazy val intName = AbcQName('int, AbcNamespace(AbcNamespaceKind.Package, Symbol("")))
 
-	private lazy val abcQName = AbcQName('AbcQName, asmNamespace)
-	private lazy val abcQNameA = AbcQName('AbcQNameA, asmNamespace)
-	private lazy val abcRTQName = AbcQName('AbcRTQName, asmNamespace)
-	private lazy val abcRTQNameA = AbcQName('AbcRTQNameA, asmNamespace)
-	private lazy val abcRTQNameL = AbcQName('AbcRTQNameL, asmNamespace)
-	private lazy val abcRTQNameLA = AbcQName('AbcRTQNameLA, asmNamespace)
-	private lazy val abcMultiname = AbcQName('AbcMultiname, asmNamespace)
-	private lazy val abcMultinameA = AbcQName('AbcMultinameA, asmNamespace)
-	private lazy val abcMultinameL = AbcQName('AbcMultinameL, asmNamespace)
-	private lazy val abcMultinameLA = AbcQName('AbcMultinameLA, asmNamespace)
-	private lazy val abcNamespace = AbcQName('AbcNamespace, asmNamespace)
-	private lazy val namespaceKind = AbcQName('NamespaceKind, asmNamespace)
-	private lazy val abcNamespaceSet = AbcQName('AbcNamespaceSet, asmNamespace)
+	private lazy val abcQName = AbcQName('AbcQName, AsmNamespace)
+	private lazy val abcQNameA = AbcQName('AbcQNameA, AsmNamespace)
+	private lazy val abcRTQName = AbcQName('AbcRTQName, AsmNamespace)
+	private lazy val abcRTQNameA = AbcQName('AbcRTQNameA, AsmNamespace)
+	private lazy val abcRTQNameL = AbcQName('AbcRTQNameL, AsmNamespace)
+	private lazy val abcRTQNameLA = AbcQName('AbcRTQNameLA, AsmNamespace)
+	private lazy val abcMultiname = AbcQName('AbcMultiname, AsmNamespace)
+	private lazy val abcMultinameA = AbcQName('AbcMultinameA, AsmNamespace)
+	private lazy val abcMultinameL = AbcQName('AbcMultinameL, AsmNamespace)
+	private lazy val abcMultinameLA = AbcQName('AbcMultinameLA, AsmNamespace)
+	private lazy val abcNamespace = AbcQName('AbcNamespace, AsmNamespace)
+	private lazy val namespaceKind = AbcQName('NamespaceKind, AsmNamespace)
+	private lazy val abcNamespaceSet = AbcQName('AbcNamespaceSet, AsmNamespace)
 
-	private lazy val add = AbcQName('Add, asmNamespace)
-	private lazy val addInt = AbcQName('AddInt, asmNamespace)
-	private lazy val applyType = AbcQName('ApplyType, asmNamespace)
-	private lazy val asType = AbcQName('AsType, asmNamespace)
-	private lazy val asTypeLate = AbcQName('AsTypeLate, asmNamespace)
-	private lazy val bitAnd = AbcQName('BitAnd, asmNamespace)
-	private lazy val bitNot = AbcQName('BitNot, asmNamespace)
-	private lazy val bitOr = AbcQName('BitOr, asmNamespace)
-	private lazy val bitXor = AbcQName('BitXor, asmNamespace)
-	private lazy val breakpoint = AbcQName('Breakpoint, asmNamespace)
-	private lazy val breakpointLine = AbcQName('BreakpointLine, asmNamespace)
-	private lazy val call = AbcQName('Call, asmNamespace)
-	private lazy val callMethod = AbcQName('CallMethod, asmNamespace)
-	private lazy val callProperty = AbcQName('CallProperty, asmNamespace)
-	private lazy val callPropLex = AbcQName('CallPropLex, asmNamespace)
-	private lazy val callPropVoid = AbcQName('CallPropVoid, asmNamespace)
-	private lazy val callStatic = AbcQName('CallStatic, asmNamespace)
-	private lazy val callSuper = AbcQName('CallSuper, asmNamespace)
-	private lazy val callSuperVoid = AbcQName('CallSuperVoid, asmNamespace)
-	private lazy val checkFilter = AbcQName('CheckFilter, asmNamespace)
-	private lazy val coerce = AbcQName('Coerce, asmNamespace)
-	private lazy val coerceAny = AbcQName('CoerceAny, asmNamespace)
-	private lazy val coerceBoolean = AbcQName('CoerceBoolean, asmNamespace)
-	private lazy val coerceDouble = AbcQName('CoerceDouble, asmNamespace)
-	private lazy val coerceInt = AbcQName('CoerceInt, asmNamespace)
-	private lazy val coerceObject = AbcQName('CoerceObject, asmNamespace)
-	private lazy val coerceString = AbcQName('CoerceString, asmNamespace)
-	private lazy val coerceUInt = AbcQName('CoerceUInt, asmNamespace)
-	private lazy val construct = AbcQName('Construct, asmNamespace)
-	private lazy val constructProp = AbcQName('ConstructProp, asmNamespace)
-	private lazy val constructSuper = AbcQName('ConstructSuper, asmNamespace)
-	private lazy val convertBoolean = AbcQName('ConvertBoolean, asmNamespace)
-	private lazy val convertInt = AbcQName('ConvertInt, asmNamespace)
-	private lazy val convertDouble = AbcQName('ConvertDouble, asmNamespace)
-	private lazy val convertObject = AbcQName('ConvertObject, asmNamespace)
-	private lazy val convertString = AbcQName('ConvertString, asmNamespace)
-	private lazy val convertUInt = AbcQName('ConvertUInt, asmNamespace)
-	private lazy val debug = AbcQName('Debug, asmNamespace)
-	private lazy val debugFile = AbcQName('DebugFile, asmNamespace)
-	private lazy val debugLine = AbcQName('DebugLine, asmNamespace)
-	private lazy val decLocal = AbcQName('DecLocal, asmNamespace)
-	private lazy val decLocalInt = AbcQName('DecLocalInt, asmNamespace)
-	private lazy val decrement = AbcQName('Decrement, asmNamespace)
-	private lazy val decrementInt = AbcQName('DecrementInt, asmNamespace)
-	private lazy val deleteProperty = AbcQName('DeleteProperty, asmNamespace)
-	private lazy val divide = AbcQName('Divide, asmNamespace)
-	private lazy val dup = AbcQName('Dup, asmNamespace)
-	private lazy val defaultXMLNamespace = AbcQName('DefaultXMLNamespace, asmNamespace)
-	private lazy val defaultXMLNamespaceLate = AbcQName('DefaultXMLNamespaceLate, asmNamespace)
-	private lazy val equals = AbcQName('Equals, asmNamespace)
-	private lazy val escapeXMLAttribute = AbcQName('EscapeXMLAttribute, asmNamespace)
-	private lazy val escapeXMLElement = AbcQName('EscapeXMLElement, asmNamespace)
-	private lazy val findProperty = AbcQName('FindProperty, asmNamespace)
-	private lazy val findPropStrict = AbcQName('FindPropStrict, asmNamespace)
-	private lazy val getDescendants = AbcQName('GetDescendants, asmNamespace)
-	private lazy val getGlobalScope = AbcQName('GetGlobalScope, asmNamespace)
-	private lazy val getGlobalSlot = AbcQName('GetGlobalSlot, asmNamespace)
-	private lazy val getLex = AbcQName('GetLex, asmNamespace)
-	private lazy val getLocal = AbcQName('GetLocal, asmNamespace)
-	private lazy val getLocal0 = AbcQName('GetLocal0, asmNamespace)
-	private lazy val getLocal1 = AbcQName('GetLocal1, asmNamespace)
-	private lazy val getLocal2 = AbcQName('GetLocal2, asmNamespace)
-	private lazy val getLocal3 = AbcQName('GetLocal3, asmNamespace)
-	private lazy val getProperty = AbcQName('GetProperty, asmNamespace)
-	private lazy val getScopeObject = AbcQName('GetScopeObject, asmNamespace)
-	private lazy val getSlot = AbcQName('GetSlot, asmNamespace)
-	private lazy val getSuper = AbcQName('GetSuper, asmNamespace)
-	private lazy val greaterEquals = AbcQName('GreaterEquals, asmNamespace)
-	private lazy val greaterThan = AbcQName('GreaterThan, asmNamespace)
-	private lazy val hasNext = AbcQName('HasNext, asmNamespace)
-	private lazy val hasNext2 = AbcQName('HasNext2, asmNamespace)
-	private lazy val ifEqual = AbcQName('IfEqual, asmNamespace)
-	private lazy val ifFalse = AbcQName('IfFalse, asmNamespace)
-	private lazy val ifGreaterEqual = AbcQName('IfGreaterEqual, asmNamespace)
-	private lazy val ifGreaterThan = AbcQName('IfGreaterThan, asmNamespace)
-	private lazy val ifLessEqual = AbcQName('IfLessEqual, asmNamespace)
-	private lazy val ifLessThan = AbcQName('IfLessThan, asmNamespace)
-	private lazy val ifNotGreaterEqual = AbcQName('IfNotGreaterEqual, asmNamespace)
-	private lazy val ifNotGreaterThan = AbcQName('IfNotGreaterThan, asmNamespace)
-	private lazy val ifNotLessEqual = AbcQName('IfNotLessEqual, asmNamespace)
-	private lazy val ifNotLessThan = AbcQName('IfNotLessThan, asmNamespace)
-	private lazy val ifNotEqual = AbcQName('IfNotEqual, asmNamespace)
-	private lazy val ifStrictEqual = AbcQName('IfStrictEqual, asmNamespace)
-	private lazy val ifStrictNotEqual = AbcQName('IfStrictNotEqual, asmNamespace)
-	private lazy val ifTrue = AbcQName('IfTrue, asmNamespace)
-	private lazy val in = AbcQName('In, asmNamespace)
-	private lazy val incLocal = AbcQName('IncLocal, asmNamespace)
-	private lazy val incLocalInt = AbcQName('IncLocalInt, asmNamespace)
-	private lazy val increment = AbcQName('Increment, asmNamespace)
-	private lazy val incrementInt = AbcQName('IncrementInt, asmNamespace)
-	private lazy val initProperty = AbcQName('InitProperty, asmNamespace)
-	private lazy val instanceOf = AbcQName('InstanceOf, asmNamespace)
-	private lazy val isType = AbcQName('IsType, asmNamespace)
-	private lazy val isTypeLate = AbcQName('IsTypeLate, asmNamespace)
-	private lazy val jump = AbcQName('Jump, asmNamespace)
-	private lazy val kill = AbcQName('Kill, asmNamespace)
-	private lazy val label = AbcQName('Label, asmNamespace)
-	private lazy val lessEquals = AbcQName('LessEquals, asmNamespace)
-	private lazy val lessThan = AbcQName('LessThan, asmNamespace)
-	private lazy val lookupSwitch = AbcQName('LookupSwitch, asmNamespace)
-	private lazy val shiftLeft = AbcQName('ShiftLeft, asmNamespace)
-	private lazy val modulo = AbcQName('Modulo, asmNamespace)
-	private lazy val multiply = AbcQName('Multiply, asmNamespace)
-	private lazy val multiplyInt = AbcQName('MultiplyInt, asmNamespace)
-	private lazy val negate = AbcQName('Negate, asmNamespace)
-	private lazy val negateInt = AbcQName('NegateInt, asmNamespace)
-	private lazy val newActivation = AbcQName('NewActivation, asmNamespace)
-	private lazy val newArray = AbcQName('NewArray, asmNamespace)
-	private lazy val newCatch = AbcQName('NewCatch, asmNamespace)
-	private lazy val newClass = AbcQName('NewClass, asmNamespace)
-	private lazy val newFunction = AbcQName('NewFunction, asmNamespace)
-	private lazy val newObject = AbcQName('NewObject, asmNamespace)
-	private lazy val nextName = AbcQName('NextName, asmNamespace)
-	private lazy val nextValue = AbcQName('NextValue, asmNamespace)
-	private lazy val nop = AbcQName('Nop, asmNamespace)
-	private lazy val not = AbcQName('Not, asmNamespace)
-	private lazy val pop = AbcQName('Pop, asmNamespace)
-	private lazy val popScope = AbcQName('PopScope, asmNamespace)
-	private lazy val pushByte = AbcQName('PushByte, asmNamespace)
-	private lazy val pushDouble = AbcQName('PushDouble, asmNamespace)
-	private lazy val pushFalse = AbcQName('PushFalse, asmNamespace)
-	private lazy val pushInt = AbcQName('PushInt, asmNamespace)
-	private lazy val pushNamespace = AbcQName('PushNamespace, asmNamespace)
-	private lazy val pushNaN = AbcQName('PushNaN, asmNamespace)
-	private lazy val pushNull = AbcQName('PushNull, asmNamespace)
-	private lazy val pushScope = AbcQName('PushScope, asmNamespace)
-	private lazy val pushShort = AbcQName('PushShort, asmNamespace)
-	private lazy val pushString = AbcQName('PushString, asmNamespace)
-	private lazy val pushTrue = AbcQName('PushTrue, asmNamespace)
-	private lazy val pushUInt = AbcQName('PushUInt, asmNamespace)
-	private lazy val pushUndefined = AbcQName('PushUndefined, asmNamespace)
-	private lazy val pushWith = AbcQName('PushWith, asmNamespace)
-	private lazy val returnValue = AbcQName('ReturnValue, asmNamespace)
-	private lazy val returnVoid = AbcQName('ReturnVoid, asmNamespace)
-	private lazy val shiftRight = AbcQName('ShiftRight, asmNamespace)
-	private lazy val setLocal = AbcQName('SetLocal, asmNamespace)
-	private lazy val setLocal0 = AbcQName('SetLocal0, asmNamespace)
-	private lazy val setLocal1 = AbcQName('SetLocal1, asmNamespace)
-	private lazy val setLocal2 = AbcQName('SetLocal2, asmNamespace)
-	private lazy val setLocal3 = AbcQName('SetLocal3, asmNamespace)
-	private lazy val setGlobalSlot = AbcQName('SetGlobalSlot, asmNamespace)
-	private lazy val setProperty = AbcQName('SetProperty, asmNamespace)
-	private lazy val setSlot = AbcQName('SetSlot, asmNamespace)
-	private lazy val setSuper = AbcQName('SetSuper, asmNamespace)
-	private lazy val strictEquals = AbcQName('StrictEquals, asmNamespace)
-	private lazy val subtract = AbcQName('Subtract, asmNamespace)
-	private lazy val subtractInt = AbcQName('SubtractInt, asmNamespace)
-	private lazy val swap = AbcQName('Swap, asmNamespace)
-	private lazy val `throw` = AbcQName('Throw, asmNamespace)
-	private lazy val typeOf = AbcQName('TypeOf, asmNamespace)
-	private lazy val shiftRightUnsigned = AbcQName('ShiftRightUnsigned, asmNamespace)
-	private lazy val setByte = AbcQName('SetByte, asmNamespace)
-	private lazy val setShort = AbcQName('SetShort, asmNamespace)
-	private lazy val setInt = AbcQName('SetInt, asmNamespace)
-	private lazy val setFloat = AbcQName('SetFloat, asmNamespace)
-	private lazy val setDouble = AbcQName('SetDouble, asmNamespace)
-	private lazy val getByte = AbcQName('GetByte, asmNamespace)
-	private lazy val getShort = AbcQName('GetShort, asmNamespace)
-	private lazy val getInt = AbcQName('GetInt, asmNamespace)
-	private lazy val getFloat = AbcQName('GetFloat, asmNamespace)
-	private lazy val getDouble = AbcQName('GetDouble, asmNamespace)
-	private lazy val sign1 = AbcQName('Sign1, asmNamespace)
-	private lazy val sign8 = AbcQName('Sign8, asmNamespace)
-	private lazy val sign16 = AbcQName('Sign16, asmNamespace)
+	private lazy val add = AbcQName('Add, AsmNamespace)
+	private lazy val addInt = AbcQName('AddInt, AsmNamespace)
+	private lazy val applyType = AbcQName('ApplyType, AsmNamespace)
+	private lazy val asType = AbcQName('AsType, AsmNamespace)
+	private lazy val asTypeLate = AbcQName('AsTypeLate, AsmNamespace)
+	private lazy val bitAnd = AbcQName('BitAnd, AsmNamespace)
+	private lazy val bitNot = AbcQName('BitNot, AsmNamespace)
+	private lazy val bitOr = AbcQName('BitOr, AsmNamespace)
+	private lazy val bitXor = AbcQName('BitXor, AsmNamespace)
+	private lazy val breakpoint = AbcQName('Breakpoint, AsmNamespace)
+	private lazy val breakpointLine = AbcQName('BreakpointLine, AsmNamespace)
+	private lazy val call = AbcQName('Call, AsmNamespace)
+	private lazy val callMethod = AbcQName('CallMethod, AsmNamespace)
+	private lazy val callProperty = AbcQName('CallProperty, AsmNamespace)
+	private lazy val callPropLex = AbcQName('CallPropLex, AsmNamespace)
+	private lazy val callPropVoid = AbcQName('CallPropVoid, AsmNamespace)
+	private lazy val callStatic = AbcQName('CallStatic, AsmNamespace)
+	private lazy val callSuper = AbcQName('CallSuper, AsmNamespace)
+	private lazy val callSuperVoid = AbcQName('CallSuperVoid, AsmNamespace)
+	private lazy val checkFilter = AbcQName('CheckFilter, AsmNamespace)
+	private lazy val coerce = AbcQName('Coerce, AsmNamespace)
+	private lazy val coerceAny = AbcQName('CoerceAny, AsmNamespace)
+	private lazy val coerceBoolean = AbcQName('CoerceBoolean, AsmNamespace)
+	private lazy val coerceDouble = AbcQName('CoerceDouble, AsmNamespace)
+	private lazy val coerceInt = AbcQName('CoerceInt, AsmNamespace)
+	private lazy val coerceObject = AbcQName('CoerceObject, AsmNamespace)
+	private lazy val coerceString = AbcQName('CoerceString, AsmNamespace)
+	private lazy val coerceUInt = AbcQName('CoerceUInt, AsmNamespace)
+	private lazy val construct = AbcQName('Construct, AsmNamespace)
+	private lazy val constructProp = AbcQName('ConstructProp, AsmNamespace)
+	private lazy val constructSuper = AbcQName('ConstructSuper, AsmNamespace)
+	private lazy val convertBoolean = AbcQName('ConvertBoolean, AsmNamespace)
+	private lazy val convertInt = AbcQName('ConvertInt, AsmNamespace)
+	private lazy val convertDouble = AbcQName('ConvertDouble, AsmNamespace)
+	private lazy val convertObject = AbcQName('ConvertObject, AsmNamespace)
+	private lazy val convertString = AbcQName('ConvertString, AsmNamespace)
+	private lazy val convertUInt = AbcQName('ConvertUInt, AsmNamespace)
+	private lazy val debug = AbcQName('Debug, AsmNamespace)
+	private lazy val debugFile = AbcQName('DebugFile, AsmNamespace)
+	private lazy val debugLine = AbcQName('DebugLine, AsmNamespace)
+	private lazy val decLocal = AbcQName('DecLocal, AsmNamespace)
+	private lazy val decLocalInt = AbcQName('DecLocalInt, AsmNamespace)
+	private lazy val decrement = AbcQName('Decrement, AsmNamespace)
+	private lazy val decrementInt = AbcQName('DecrementInt, AsmNamespace)
+	private lazy val deleteProperty = AbcQName('DeleteProperty, AsmNamespace)
+	private lazy val divide = AbcQName('Divide, AsmNamespace)
+	private lazy val dup = AbcQName('Dup, AsmNamespace)
+	private lazy val defaultXMLNamespace = AbcQName('DefaultXMLNamespace, AsmNamespace)
+	private lazy val defaultXMLNamespaceLate = AbcQName('DefaultXMLNamespaceLate, AsmNamespace)
+	private lazy val equals = AbcQName('Equals, AsmNamespace)
+	private lazy val escapeXMLAttribute = AbcQName('EscapeXMLAttribute, AsmNamespace)
+	private lazy val escapeXMLElement = AbcQName('EscapeXMLElement, AsmNamespace)
+	private lazy val findDef = AbcQName('FindDef, AsmNamespace)
+	private lazy val findProperty = AbcQName('FindProperty, AsmNamespace)
+	private lazy val findPropStrict = AbcQName('FindPropStrict, AsmNamespace)
+	private lazy val getDescendants = AbcQName('GetDescendants, AsmNamespace)
+	private lazy val getGlobalScope = AbcQName('GetGlobalScope, AsmNamespace)
+	private lazy val getGlobalSlot = AbcQName('GetGlobalSlot, AsmNamespace)
+	private lazy val getLex = AbcQName('GetLex, AsmNamespace)
+	private lazy val getLocal = AbcQName('GetLocal, AsmNamespace)
+	private lazy val getLocal0 = AbcQName('GetLocal0, AsmNamespace)
+	private lazy val getLocal1 = AbcQName('GetLocal1, AsmNamespace)
+	private lazy val getLocal2 = AbcQName('GetLocal2, AsmNamespace)
+	private lazy val getLocal3 = AbcQName('GetLocal3, AsmNamespace)
+	private lazy val getProperty = AbcQName('GetProperty, AsmNamespace)
+	private lazy val getScopeObject = AbcQName('GetScopeObject, AsmNamespace)
+	private lazy val getSlot = AbcQName('GetSlot, AsmNamespace)
+	private lazy val getSuper = AbcQName('GetSuper, AsmNamespace)
+	private lazy val greaterEquals = AbcQName('GreaterEquals, AsmNamespace)
+	private lazy val greaterThan = AbcQName('GreaterThan, AsmNamespace)
+	private lazy val hasNext = AbcQName('HasNext, AsmNamespace)
+	private lazy val hasNext2 = AbcQName('HasNext2, AsmNamespace)
+	private lazy val ifEqual = AbcQName('IfEqual, AsmNamespace)
+	private lazy val ifFalse = AbcQName('IfFalse, AsmNamespace)
+	private lazy val ifGreaterEqual = AbcQName('IfGreaterEqual, AsmNamespace)
+	private lazy val ifGreaterThan = AbcQName('IfGreaterThan, AsmNamespace)
+	private lazy val ifLessEqual = AbcQName('IfLessEqual, AsmNamespace)
+	private lazy val ifLessThan = AbcQName('IfLessThan, AsmNamespace)
+	private lazy val ifNotGreaterEqual = AbcQName('IfNotGreaterEqual, AsmNamespace)
+	private lazy val ifNotGreaterThan = AbcQName('IfNotGreaterThan, AsmNamespace)
+	private lazy val ifNotLessEqual = AbcQName('IfNotLessEqual, AsmNamespace)
+	private lazy val ifNotLessThan = AbcQName('IfNotLessThan, AsmNamespace)
+	private lazy val ifNotEqual = AbcQName('IfNotEqual, AsmNamespace)
+	private lazy val ifStrictEqual = AbcQName('IfStrictEqual, AsmNamespace)
+	private lazy val ifStrictNotEqual = AbcQName('IfStrictNotEqual, AsmNamespace)
+	private lazy val ifTrue = AbcQName('IfTrue, AsmNamespace)
+	private lazy val in = AbcQName('In, AsmNamespace)
+	private lazy val incLocal = AbcQName('IncLocal, AsmNamespace)
+	private lazy val incLocalInt = AbcQName('IncLocalInt, AsmNamespace)
+	private lazy val increment = AbcQName('Increment, AsmNamespace)
+	private lazy val incrementInt = AbcQName('IncrementInt, AsmNamespace)
+	private lazy val initProperty = AbcQName('InitProperty, AsmNamespace)
+	private lazy val instanceOf = AbcQName('InstanceOf, AsmNamespace)
+	private lazy val isType = AbcQName('IsType, AsmNamespace)
+	private lazy val isTypeLate = AbcQName('IsTypeLate, AsmNamespace)
+	private lazy val jump = AbcQName('Jump, AsmNamespace)
+	private lazy val kill = AbcQName('Kill, AsmNamespace)
+	private lazy val label = AbcQName('Label, AsmNamespace)
+	private lazy val lessEquals = AbcQName('LessEquals, AsmNamespace)
+	private lazy val lessThan = AbcQName('LessThan, AsmNamespace)
+	private lazy val lookupSwitch = AbcQName('LookupSwitch, AsmNamespace)
+	private lazy val shiftLeft = AbcQName('ShiftLeft, AsmNamespace)
+	private lazy val modulo = AbcQName('Modulo, AsmNamespace)
+	private lazy val multiply = AbcQName('Multiply, AsmNamespace)
+	private lazy val multiplyInt = AbcQName('MultiplyInt, AsmNamespace)
+	private lazy val negate = AbcQName('Negate, AsmNamespace)
+	private lazy val negateInt = AbcQName('NegateInt, AsmNamespace)
+	private lazy val newActivation = AbcQName('NewActivation, AsmNamespace)
+	private lazy val newArray = AbcQName('NewArray, AsmNamespace)
+	private lazy val newCatch = AbcQName('NewCatch, AsmNamespace)
+	private lazy val newClass = AbcQName('NewClass, AsmNamespace)
+	private lazy val newFunction = AbcQName('NewFunction, AsmNamespace)
+	private lazy val newObject = AbcQName('NewObject, AsmNamespace)
+	private lazy val nextName = AbcQName('NextName, AsmNamespace)
+	private lazy val nextValue = AbcQName('NextValue, AsmNamespace)
+	private lazy val nop = AbcQName('Nop, AsmNamespace)
+	private lazy val not = AbcQName('Not, AsmNamespace)
+	private lazy val pop = AbcQName('Pop, AsmNamespace)
+	private lazy val popScope = AbcQName('PopScope, AsmNamespace)
+	private lazy val pushByte = AbcQName('PushByte, AsmNamespace)
+	private lazy val pushDouble = AbcQName('PushDouble, AsmNamespace)
+	private lazy val pushFalse = AbcQName('PushFalse, AsmNamespace)
+	private lazy val pushInt = AbcQName('PushInt, AsmNamespace)
+	private lazy val pushNamespace = AbcQName('PushNamespace, AsmNamespace)
+	private lazy val pushNaN = AbcQName('PushNaN, AsmNamespace)
+	private lazy val pushNull = AbcQName('PushNull, AsmNamespace)
+	private lazy val pushScope = AbcQName('PushScope, AsmNamespace)
+	private lazy val pushShort = AbcQName('PushShort, AsmNamespace)
+	private lazy val pushString = AbcQName('PushString, AsmNamespace)
+	private lazy val pushTrue = AbcQName('PushTrue, AsmNamespace)
+	private lazy val pushUInt = AbcQName('PushUInt, AsmNamespace)
+	private lazy val pushUndefined = AbcQName('PushUndefined, AsmNamespace)
+	private lazy val pushWith = AbcQName('PushWith, AsmNamespace)
+	private lazy val returnValue = AbcQName('ReturnValue, AsmNamespace)
+	private lazy val returnVoid = AbcQName('ReturnVoid, AsmNamespace)
+	private lazy val shiftRight = AbcQName('ShiftRight, AsmNamespace)
+	private lazy val setLocal = AbcQName('SetLocal, AsmNamespace)
+	private lazy val setLocal0 = AbcQName('SetLocal0, AsmNamespace)
+	private lazy val setLocal1 = AbcQName('SetLocal1, AsmNamespace)
+	private lazy val setLocal2 = AbcQName('SetLocal2, AsmNamespace)
+	private lazy val setLocal3 = AbcQName('SetLocal3, AsmNamespace)
+	private lazy val setGlobalSlot = AbcQName('SetGlobalSlot, AsmNamespace)
+	private lazy val setProperty = AbcQName('SetProperty, AsmNamespace)
+	private lazy val setSlot = AbcQName('SetSlot, AsmNamespace)
+	private lazy val setSuper = AbcQName('SetSuper, AsmNamespace)
+	private lazy val strictEquals = AbcQName('StrictEquals, AsmNamespace)
+	private lazy val subtract = AbcQName('Subtract, AsmNamespace)
+	private lazy val subtractInt = AbcQName('SubtractInt, AsmNamespace)
+	private lazy val swap = AbcQName('Swap, AsmNamespace)
+	private lazy val `throw` = AbcQName('Throw, AsmNamespace)
+	private lazy val typeOf = AbcQName('TypeOf, AsmNamespace)
+	private lazy val shiftRightUnsigned = AbcQName('ShiftRightUnsigned, AsmNamespace)
+	private lazy val setByte = AbcQName('SetByte, AsmNamespace)
+	private lazy val setShort = AbcQName('SetShort, AsmNamespace)
+	private lazy val setInt = AbcQName('SetInt, AsmNamespace)
+	private lazy val setFloat = AbcQName('SetFloat, AsmNamespace)
+	private lazy val setDouble = AbcQName('SetDouble, AsmNamespace)
+	private lazy val getByte = AbcQName('GetByte, AsmNamespace)
+	private lazy val getShort = AbcQName('GetShort, AsmNamespace)
+	private lazy val getInt = AbcQName('GetInt, AsmNamespace)
+	private lazy val getFloat = AbcQName('GetFloat, AsmNamespace)
+	private lazy val getDouble = AbcQName('GetDouble, AsmNamespace)
+	private lazy val sign1 = AbcQName('Sign1, AsmNamespace)
+	private lazy val sign8 = AbcQName('Sign8, AsmNamespace)
+	private lazy val sign16 = AbcQName('Sign16, AsmNamespace)
 
 	def apply(bytecode: Bytecode): Boolean = {
 		var modified = false
@@ -253,13 +257,13 @@ object AsmExpansion {
 		}
 		def throwError(msg: String) {
 			optDebugFile match {
-				case Some(debugFile) => {
+				case Some(aDebugFile) => {
 					bytecode.dump()
-					error(debugFile.file + ":" + lineNum + " => " + msg)
+					sys.error(aDebugFile.file + ":" + lineNum + " => " + msg)
 				}
 				case _ => {
 					bytecode.dump()
-					error(msg)
+					sys.error(msg)
 				}
 			}
 		}
@@ -269,14 +273,14 @@ object AsmExpansion {
 			@tailrec def loop() {
 				if(stack.nonEmpty) {
 					stack.head match {
-						case cp@CallProperty(abcName, x) if (abcName == abcNamespaceSet) => {
+						case cp@CallProperty(abcName, x) if abcName == abcNamespaceSet => {
 							nextOp()
 							removes = cp :: removes
 						}
 						case fp@FindPropStrict(aName) => {
 							removes = fp :: removes
 							aName match {
-								case AbcQName('__as3, asmNamespace) => {
+								case AbcQName('__as3, AsmNamespace) => {
 									resolveABCName('AbcNamespaceSet) match {
 										case Some(abcName) => abcName match {
 											case qn: AbcQName => nsList = qn.namespace :: nsList
@@ -286,7 +290,7 @@ object AsmExpansion {
 										case _ =>
 									}
 								}
-								case AbcQName('__cint, asmNamespace) => {
+								case AbcQName('__cint, AsmNamespace) => {
 									resolveABCName('AbcNamespaceSet) match {
 										case Some(abcName) => abcName match {
 											case qn: AbcQName => nsList = qn.namespace :: nsList
@@ -296,7 +300,7 @@ object AsmExpansion {
 										case _ =>
 									}
 								}
-								case AbcQName('AbcNamespace, asmNamespace) => {
+								case AbcQName('AbcNamespace, AsmNamespace) => {
 									nextOp()
 									readABCNamespace("abcNamespaceSet is expecting abcNamespace arguments") match {
 										case Some(abcNs) => nsList = abcNs :: nsList
@@ -318,9 +322,9 @@ object AsmExpansion {
 		@inline def readABCNamespace(msg: String = ""): Option[AbcNamespace] = {
 			var ret: Option[AbcNamespace] = None
 			expectNextOp(msg) match {
-				case op1@GetLex(nsKind) if (nsKind == namespaceKind) =>
+				case op1@GetLex(nsKind) if nsKind == namespaceKind =>
 					expectNextOp() match {
-						case op2@GetProperty(typeName) if (typeName.kind == AbcNameKind.QName) => {
+						case op2@GetProperty(typeName) if typeName.kind == AbcNameKind.QName => {
 							val qName = typeName.asInstanceOf[AbcQName]
 							expectNextOp() match {
 								case op3@PushString(name) => {
@@ -363,7 +367,7 @@ object AsmExpansion {
 								case _ => throwError("missing arguments for abcNamespace")
 							}
 							expectNextOp("invalid call to abcNamespace") match {
-								case cp@CallProperty(aName, 2) if (aName == abcNamespace) => removes = cp :: removes
+								case cp@CallProperty(aName, 2) if aName == abcNamespace => removes = cp :: removes
 								case _ => throwError("invalid call to abcNamespace")
 							}
 						}
@@ -379,7 +383,7 @@ object AsmExpansion {
 			@tailrec def loop(): Unit = {
 				if(stack.nonEmpty) {
 					nextOp() match {
-						case op@CallProperty(aName, count) if (aName == abcName) => ret = op :: ret
+						case op@CallProperty(aName, count) if aName == abcName => ret = op :: ret
 						case _@op => {
 							ret = op :: ret
 							loop()
@@ -392,7 +396,7 @@ object AsmExpansion {
 		}
 
 		def resolveMarker(symbol: Symbol) = {
-			val newSymbol = Symbol(symbol.toString.tail + ":")
+			val newSymbol = Symbol(symbol.toString().tail + ":")
 			if(markerMap.contains(newSymbol)) {
 				val marker = markerMap(newSymbol)
 				isBackwardMarker = isBackwardMarker.updated(marker, true)
@@ -412,7 +416,7 @@ object AsmExpansion {
 		@inline def readOp_Marker_Markers(opName: Symbol, abcName: AbcName, opFactory: (Marker, Array[Marker]) => AbstractOp) {
 			expectNextOp(opName + " expect a string label as first parameter") match {
 				case ps@PushString(symbol) => {
-					if(symbol.toString.last == ':') {
+					if(symbol.toString().last == ':') {
 						throwError("the target label " + symbol + " mustn't ended with :")
 					}
 
@@ -423,15 +427,15 @@ object AsmExpansion {
 					@tailrec def loop() {
 						if(stack.nonEmpty) {
 							stack.head match {
-								case cp@CallProperty(aName, count) if (aName == abcName) => {
+								case cp@CallProperty(aName, count) if aName == abcName => {
 									removes = cp :: removes
 									nextOp()
 								}
-								case ps@PushString(symbol) => {
-									if(symbol.toString.last == ':') {
-										throwError("the target label " + symbol + " mustn't ended with :")
+								case ps@PushString(aSymbol) => {
+									if(aSymbol.toString().last == ':') {
+										throwError("the target label " + aSymbol + " mustn't ended with :")
 									}
-									cases = resolveMarker(symbol) :: cases
+									cases = resolveMarker(aSymbol) :: cases
 									removes = ps :: removes
 									nextOp()
 									loop()
@@ -452,12 +456,12 @@ object AsmExpansion {
 		@inline def readOp_Marker(opName: Symbol, abcName: AbcName, opFactory: (Marker) => AbstractOp) {
 			expectNextOp(opName + " expect a string as parameter") match {
 				case ps@PushString(symbol) => {
-					if(symbol.toString.last == ':') {
+					if(symbol.toString().last == ':') {
 						throwError("the target label " + symbol + " mustn't ended with :")
 					}
 
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = ps :: removes
 							val marker = resolveMarker(symbol)
 							replacements = replacements.updated(cp, List(opFactory(marker)))
@@ -473,7 +477,7 @@ object AsmExpansion {
 			expectNextOp(opName + " expect a string as parameter") match {
 				case ps@PushString(str) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = ps :: removes
 							replacements = replacements.updated(cp, List(opFactory(str)))
 						}
@@ -488,7 +492,7 @@ object AsmExpansion {
 			if(ops.isEmpty) {
 				throwError(opName + " expect a variable name or a register number")
 			} else ops.head match {
-				case cp@CallProperty(aName, count) if (aName == abcName) => {
+				case cp@CallProperty(aName, count) if aName == abcName => {
 					removes = cp :: removes
 					ops = ops.tail
 					if(ops.isEmpty) {
@@ -515,7 +519,7 @@ object AsmExpansion {
 			expectNextOp(opName + " expect an integer as parameter") match {
 				case pb@PushByte(value) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = pb :: removes
 							replacements = replacements.updated(cp, List(opFactory(value)))
 						}
@@ -524,7 +528,7 @@ object AsmExpansion {
 				}
 				case ps@PushShort(value) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = ps :: removes
 							replacements = replacements.updated(cp, List(opFactory(value)))
 						}
@@ -533,7 +537,7 @@ object AsmExpansion {
 				}
 				case pi@PushInt(value) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = pi :: removes
 							replacements = replacements.updated(cp, List(opFactory(value)))
 						}
@@ -549,7 +553,7 @@ object AsmExpansion {
 					expectNextOp(opName + " expect an integer as second parameter") match {
 						case pb2@PushByte(value2) => {
 							expectNextOp("invalid call to " + opName) match {
-								case cp@CallProperty(aName, 2) if (aName == abcName) => {
+								case cp@CallProperty(aName, 2) if aName == abcName => {
 									removes = pb :: pb2 :: removes
 									replacements = replacements.updated(cp, List(opFactory(value, value2)))
 								}
@@ -558,7 +562,7 @@ object AsmExpansion {
 						}
 						case dup@Dup() => {
 							expectNextOp("invalid call to " + opName) match {
-								case cp@CallProperty(aName, 2) if (aName == abcName) => {
+								case cp@CallProperty(aName, 2) if aName == abcName => {
 									removes = pb :: dup :: removes
 									replacements = replacements.updated(cp, List(opFactory(value, value)))
 								}
@@ -594,7 +598,7 @@ object AsmExpansion {
 			resolveABCName(opName) match {
 				case Some(name) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => replacements = replacements.updated(cp, List(opFactory(name)))
+						case cp@CallProperty(aName, 1) if aName == abcName => replacements = replacements.updated(cp, List(opFactory(name)))
 						case _ => throwError("invalid call to " + opName)
 					}
 				}
@@ -607,7 +611,7 @@ object AsmExpansion {
 					expectNextOp(opName + " expect arguments count as second parameter") match {
 						case pb@PushByte(count) => {
 							expectNextOp("invalid call to " + opName) match {
-								case cp@CallProperty(thatName, 2) if (thatName == abcName) => {
+								case cp@CallProperty(thatName, 2) if thatName == abcName => {
 									removes = pb :: removes
 									replacements = replacements.updated(cp, List(opFactory(aName, count)))
 								}
@@ -616,7 +620,7 @@ object AsmExpansion {
 						}
 						case pi@PushInt(count) => {
 							expectNextOp("invalid call to " + opName) match {
-								case cp@CallProperty(thatName, 2) if (thatName == abcName) => {
+								case cp@CallProperty(thatName, 2) if thatName == abcName => {
 									removes = pi :: removes
 									replacements = replacements.updated(cp, List(opFactory(aName, count)))
 								}
@@ -634,11 +638,11 @@ object AsmExpansion {
 			expectNextOp("invalid call to " + asmOpName) match {
 				case gl@GetLex(abcName) => {
 					abcName match {
-						case AbcQName('AbcRTQNameL, asmNamespace) => {
+						case AbcQName('AbcRTQNameL, AsmNamespace) => {
 							removes = gl :: removes
 							ret = Some(AbcRTQNameL)
 						}
-						case AbcQName('AbcRTQNameLA, asmNamespace) => {
+						case AbcQName('AbcRTQNameLA, AsmNamespace) => {
 							removes = gl :: removes
 							ret = Some(AbcRTQNameLA)
 						}
@@ -647,45 +651,45 @@ object AsmExpansion {
 				}
 				case fp@FindPropStrict(abcName) => {
 					abcName match {
-						case AbcQName('AbcMultinameLA, asmNamespace) => {
+						case AbcQName('AbcMultinameLA, AsmNamespace) => {
 							expectNextOp("AbcMultinameLA is expecting an abcNamespaceSet as argument into " + asmOpName) match {
-								case fp2@FindPropStrict(fpAbcNamespace) if (fpAbcNamespace == abcNamespaceSet) => {
+								case fp2@FindPropStrict(fpAbcNamespace) if fpAbcNamespace == abcNamespaceSet => {
 									removes = fp2 :: removes
 									val ns = readABCNamespaceSet("AbcMultinameLA is expecting an abcNamespaceSet as argument into " + asmOpName)
 									ret = Some(AbcMultinameLA(ns))
 									expectNextOp("invalid call to AbcMultinameLA into " + asmOpName) match {
-										case cp@CallProperty(aName, 1) if (aName == abcMultinameLA) => removes = cp :: removes
+										case cp@CallProperty(aName, 1) if aName == abcMultinameLA => removes = cp :: removes
 										case _ => throwError("invalid call to AbcMultinameLA into " + asmOpName)
 									}
 								}
 								case _ => throwError("AbcMultinameLA is expecting an AbcNamespaceSet as argument into " + asmOpName)
 							}
 						}
-						case AbcQName('AbcMultinameL, asmNamespace) => {
+						case AbcQName('AbcMultinameL, AsmNamespace) => {
 							expectNextOp("AbcMultinameL is expecting an AbcNamespaceSet as argument into " + asmOpName) match {
-								case fp2@FindPropStrict(fpAbcNamespace) if (fpAbcNamespace == abcNamespaceSet) => {
+								case fp2@FindPropStrict(fpAbcNamespace) if fpAbcNamespace == abcNamespaceSet => {
 									removes = fp2 :: removes
 									val ns = readABCNamespaceSet("AbcMultinameL is expecting an AbcNamespaceSet as argument into " + asmOpName)
 									ret = Some(AbcMultinameL(ns))
 									expectNextOp("invalid call to AbcMultinameL into " + asmOpName) match {
-										case cp@CallProperty(aName, 1) if (aName == abcMultinameL) => removes = cp :: removes
+										case cp@CallProperty(aName, 1) if aName == abcMultinameL => removes = cp :: removes
 										case _ => throwError("invalid call to AbcMultinameL into " + asmOpName)
 									}
 								}
 								case _ => throwError("AbcMultinameL is expecting an AbcNamespaceSet as argument into " + asmOpName)
 							}
 						}
-						case AbcQName('AbcMultinameA, asmNamespace) => {
+						case AbcQName('AbcMultinameA, AsmNamespace) => {
 							expectNextOp("AbcMultinameA is expecting a string as it's first argument into " + asmOpName) match {
 								case ps@PushString(psValue) => {
 									removes = ps :: removes
 									expectNextOp("AbcMultinameA is expecting an AbcNamespaceSet as it's second argument into " + asmOpName) match {
-										case fp2@FindPropStrict(fpAbcNamespace) if (fpAbcNamespace == abcNamespaceSet) => {
+										case fp2@FindPropStrict(fpAbcNamespace) if fpAbcNamespace == abcNamespaceSet => {
 											removes = fp2 :: removes
 											val ns = readABCNamespaceSet("AbcMultinameA is expecting an AbcNamespaceSet as it's second argument into " + asmOpName)
 											ret = Some(AbcMultinameA(psValue, ns))
 											expectNextOp("invalid call to abcMultinameA into " + asmOpName) match {
-												case cp@CallProperty(aName, 2) if (aName == abcMultinameA) => removes = cp :: removes
+												case cp@CallProperty(aName, 2) if aName == abcMultinameA => removes = cp :: removes
 												case _ => throwError("invalid call to abcMultinameA into " + asmOpName)
 											}
 										}
@@ -695,17 +699,17 @@ object AsmExpansion {
 								case _ => throwError("AbcMultinameA is expecting a string as it's first argument into " + asmOpName)
 							}
 						}
-						case AbcQName('AbcMultiname, asmNamespace) => {
+						case AbcQName('AbcMultiname, AsmNamespace) => {
 							expectNextOp("AbcMultiname is expecting a string as it's first argument into " + asmOpName) match {
 								case ps@PushString(psValue) => {
 									removes = ps :: removes
 									expectNextOp("AbcMultiname is expecting an AbcNamespaceSet as it's second argument into " + asmOpName) match {
-										case fp2@FindPropStrict(fpAbcNamespace) if (fpAbcNamespace == abcNamespaceSet) => {
+										case fp2@FindPropStrict(fpAbcNamespace) if fpAbcNamespace == abcNamespaceSet => {
 											removes = fp2 :: removes
 											val ns = readABCNamespaceSet("AbcMultiname is expecting an AbcNamespaceSet as it's second argument into " + asmOpName)
 											ret = Some(AbcMultiname(psValue, ns))
 											expectNextOp("invalid call to abcMultiname into " + asmOpName) match {
-												case cp@CallProperty(aName, 2) if (aName == abcMultiname) => removes = cp :: removes
+												case cp@CallProperty(aName, 2) if aName == abcMultiname => removes = cp :: removes
 												case _ => throwError("invalid call to abcMultiname into " + asmOpName)
 											}
 										}
@@ -715,44 +719,44 @@ object AsmExpansion {
 								case _ => throwError("AbcMultiname is expecting a string as it's first argument into " + asmOpName)
 							}
 						}
-						case AbcQName('AbcRTQNameA, asmNamespace) => {
+						case AbcQName('AbcRTQNameA, AsmNamespace) => {
 							expectNextOp("AbcRTQNameA is expecting a string as argument into " + asmOpName) match {
 								case ps@PushString(psValue) => {
 									removes = ps :: removes
 									ret = Some(AbcRTQNameA(psValue))
 									expectNextOp("invalid call to AbcRTQNameA into " + asmOpName) match {
-										case cp@CallProperty(aName, 1) if (aName == abcRTQNameA) => removes = cp :: removes
+										case cp@CallProperty(aName, 1) if aName == abcRTQNameA => removes = cp :: removes
 										case _ => throwError("invalid call to AbcRTQNameA into " + asmOpName)
 									}
 								}
 								case _ => throwError("AbcRTQNameA is expecting a string as argument into " + asmOpName)
 							}
 						}
-						case AbcQName('AbcRTQName, asmNamespace) => {
+						case AbcQName('AbcRTQName, AsmNamespace) => {
 							expectNextOp("AbcRTQName is expecting a string as argument into " + asmOpName) match {
 								case ps@PushString(psValue) => {
 									removes = ps :: removes
 									ret = Some(AbcRTQName(psValue))
 									expectNextOp("invalid call to AbcRTQName into " + asmOpName) match {
-										case cp@CallProperty(aName, 1) if (aName == abcRTQName) => removes = cp :: removes
+										case cp@CallProperty(aName, 1) if aName == abcRTQName => removes = cp :: removes
 										case _ => throwError("invalid call to AbcRTQName into " + asmOpName)
 									}
 								}
 								case _ => throwError("AbcRTQName is expecting a string as argument into " + asmOpName)
 							}
 						}
-						case AbcQName('AbcQNameA, asmNamespace) => {
+						case AbcQName('AbcQNameA, AsmNamespace) => {
 							expectNextOp("AbcQNameA is expecting a string as it's first argument into " + asmOpName) match {
 								case ps@PushString(psValue) => {
 									removes = ps :: removes
 									expectNextOp("AbcQNameA is expecting an abcNamespace as it's second argument into " + asmOpName) match {
-										case fp2@FindPropStrict(fpAbcNamespace) if (fpAbcNamespace == abcNamespace) => {
+										case fp2@FindPropStrict(fpAbcNamespace) if fpAbcNamespace == abcNamespace => {
 											removes = fp2 :: removes
 											readABCNamespace("AbcQNameA is expecting an abcNamespace as it's second argument into " + asmOpName) match {
 												case Some(ns) => {
 													ret = Some(AbcQNameA(psValue, ns))
 													expectNextOp("invalid call to AbcQNameA into " + asmOpName) match {
-														case cp@CallProperty(aName, 2) if (aName == abcQNameA) => removes = cp :: removes
+														case cp@CallProperty(aName, 2) if aName == abcQNameA => removes = cp :: removes
 														case _ => throwError("invalid call to AbcQNameA into " + asmOpName)
 													}
 												}
@@ -765,18 +769,18 @@ object AsmExpansion {
 								case _ => throwError("AbcQNameA is expecting a string as it's first argument into " + asmOpName)
 							}
 						}
-						case AbcQName('AbcQName, asmNamespace) => {
+						case AbcQName('AbcQName, AsmNamespace) => {
 							expectNextOp("AbcQName is expecting a string as it's first argument into " + asmOpName) match {
 								case ps@PushString(psValue) => {
 									removes = ps :: removes
 									expectNextOp("AbcQName is expecting an abcNamespace as it's second argument into " + asmOpName) match {
-										case fp2@FindPropStrict(fpAbcNamespace) if (fpAbcNamespace == abcNamespace) => {
+										case fp2@FindPropStrict(fpAbcNamespace) if fpAbcNamespace == abcNamespace => {
 											removes = fp2 :: removes
 											readABCNamespace("AbcQName is expecting an AbcNamespace as it's second argument into " + asmOpName) match {
 												case Some(ns) => {
 													ret = Some(AbcQName(psValue, ns))
 													expectNextOp("invalid call to AbcQName into " + asmOpName) match {
-														case cp@CallProperty(aName, 2) if (aName == abcQName) => removes = cp :: removes
+														case cp@CallProperty(aName, 2) if aName == abcQName => removes = cp :: removes
 														case _ => throwError("invalid call to AbcQName into " + asmOpName)
 													}
 												}
@@ -789,12 +793,12 @@ object AsmExpansion {
 								case _ => throwError("AbcQName is expecting a string as it's first argument into " + asmOpName)
 							}
 						}
-						case AbcQName('__as3, asmNamespace) => {
+						case AbcQName('__as3, AsmNamespace) => {
 							var ops = readUntil(__as3)
 							ops.headOption match {
 								case Some(op) => {
 									op match {
-										case CallProperty(aName, count) if (aName == __as3) => {
+										case CallProperty(aName, count) if aName == __as3 => {
 											ops = ops.tail
 											ops.headOption match {
 												case Some(gl: GetLex) => {
@@ -823,12 +827,12 @@ object AsmExpansion {
 							}
 							ops.map(op => removes = op :: removes)
 						}
-						case AbcQName('__cint, asmNamespace) => {
+						case AbcQName('__cint, AsmNamespace) => {
 							var ops = readUntil(__cint)
 							ops.headOption match {
 								case Some(op) => {
 									op match {
-										case CallProperty(aName, count) if (aName == __cint) => {
+										case CallProperty(aName, count) if aName == __cint => {
 											ops = ops.tail
 											ops.headOption match {
 												case Some(gl: GetLex) => {
@@ -865,7 +869,7 @@ object AsmExpansion {
 			expectNextOp(opName + " expect an unsigned integer as parameter") match {
 				case pb@PushByte(value) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = pb :: removes
 							replacements = replacements.updated(cp, List(opFactory(value.toLong)))
 						}
@@ -874,7 +878,7 @@ object AsmExpansion {
 				}
 				case ps@PushShort(value) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = ps :: removes
 							replacements = replacements.updated(cp, List(opFactory(value.toLong)))
 						}
@@ -883,7 +887,7 @@ object AsmExpansion {
 				}
 				case pi@PushInt(value) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = pi :: removes
 							replacements = replacements.updated(cp, List(opFactory(value.toLong)))
 						}
@@ -892,7 +896,7 @@ object AsmExpansion {
 				}
 				case pu@PushUInt(value) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = pu :: removes
 							replacements = replacements.updated(cp, List(opFactory(value)))
 						}
@@ -901,7 +905,7 @@ object AsmExpansion {
 				}
 				case pd@PushDouble(value) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = pd :: removes
 							replacements = replacements.updated(cp, List(opFactory(value.toLong)))
 						}
@@ -915,7 +919,7 @@ object AsmExpansion {
 			expectNextOp(opName + " expect a string as parameter") match {
 				case ps@PushString(str) => {
 					removes = ps :: removes
-					str.toString.tail.toString
+					str.toString().tail.toString
 				}
 				case _ => throwError(opName + " expect a string as parameter"); ""
 			}
@@ -924,7 +928,7 @@ object AsmExpansion {
 			expectNextOp(opName + " expect a number as parameter") match {
 				case pb@PushByte(value) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = pb :: removes
 							replacements = replacements.updated(cp, List(opFactory(value.toDouble)))
 						}
@@ -933,7 +937,7 @@ object AsmExpansion {
 				}
 				case ps@PushShort(value) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = ps :: removes
 							replacements = replacements.updated(cp, List(opFactory(value.toDouble)))
 						}
@@ -942,7 +946,7 @@ object AsmExpansion {
 				}
 				case pi@PushInt(value) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = pi :: removes
 							replacements = replacements.updated(cp, List(opFactory(value.toDouble)))
 						}
@@ -951,7 +955,7 @@ object AsmExpansion {
 				}
 				case pu@PushUInt(value) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = pu :: removes
 							replacements = replacements.updated(cp, List(opFactory(value.toDouble)))
 						}
@@ -960,7 +964,7 @@ object AsmExpansion {
 				}
 				case pd@PushDouble(value) => {
 					expectNextOp("invalid call to " + opName) match {
-						case cp@CallProperty(aName, 1) if (aName == abcName) => {
+						case cp@CallProperty(aName, 1) if aName == abcName => {
 							removes = pd :: removes
 							replacements = replacements.updated(cp, List(opFactory(value)))
 						}
@@ -1001,7 +1005,6 @@ object AsmExpansion {
 			if(numArguments == 0 || stack.isEmpty)
 				false
 			else {
-				var done = false
 				def loop() {
 					val currentOp = stack.head
 					stack = stack.tail
@@ -1009,7 +1012,7 @@ object AsmExpansion {
 						case GetLocal(0) =>
 						case DebugLine(line) => lineNum = line
 						case PushString(value) => {
-							if(value.toString.last != ':') {
+							if(value.toString().last != ':') {
 								throwError("label " + value + " have to ended with :")
 							} else if(markerMap.contains(value))
 								throwError("duplicate label " + value)
@@ -1025,7 +1028,7 @@ object AsmExpansion {
 							}
 						}
 						case gl@GetLex(typeName) => typeName match {
-							case AbcQName(asmOpName, asmNamespace) => {
+							case AbcQName(asmOpName, AsmNamespace) => {
 								asmOpName match {
 									case 'Add => {
 										replacements = replacements.updated(gl, List(Add()))
@@ -1312,7 +1315,7 @@ object AsmExpansion {
 							case _ =>
 						}
 						case FindPropStrict(typeName) => typeName match {
-							case AbcQName(asmOpName, asmNamespace) => {
+							case AbcQName(asmOpName, AsmNamespace) => {
 								asmOpName match {
 									case 'CallProperty => {
 										readOp_AbcName_Int(asmOpName, callProperty, (abcName: AbcName, args: Int) => CallProperty(abcName, args))
@@ -1364,6 +1367,10 @@ object AsmExpansion {
 									}
 									case 'DeleteProperty => {
 										readOp_AbcName(asmOpName, deleteProperty, (abcName: AbcName) => DeleteProperty(abcName))
+										removes = currentOp :: removes
+									}
+									case 'FindDef => {
+										readOp_AbcName(asmOpName, findDef, (abcName: AbcName) => FindDef(abcName))
 										removes = currentOp :: removes
 									}
 									case 'FindProperty => {
@@ -1580,7 +1587,7 @@ object AsmExpansion {
 										ops.headOption match {
 											case Some(op) => {
 												op match {
-													case CallProperty(aName, count) if (aName == __as3) => {
+													case CallProperty(aName, count) if aName == __as3 => {
 														removes = currentOp :: op :: removes
 														//														replacements = replacements.updated(op, ops.reverse.dropRight(1))
 													}
@@ -1595,7 +1602,7 @@ object AsmExpansion {
 										ops.headOption match {
 											case Some(op) => {
 												op match {
-													case CallProperty(aName, count) if (aName == __cint) => {
+													case CallProperty(aName, count) if aName == __cint => {
 														removes = currentOp :: op :: removes
 
 														for($op <- ops) $op match {
@@ -1636,7 +1643,7 @@ object AsmExpansion {
 			if(numArguments != 0 && stack.nonEmpty) {
 				val currentOp = callOp
 				currentOp match {
-					case CallProperty(aName, count) if (aName == __cint) => {
+					case CallProperty(aName, count) if aName == __cint => {
 						@tailrec def loop() {
 							if(stack.nonEmpty) {
 								val $op = stack.head
@@ -1656,7 +1663,7 @@ object AsmExpansion {
 						}
 						loop()
 					}
-					case CallPropVoid(aName, count) if (aName == __cint) => {
+					case CallPropVoid(aName, count) if aName == __cint => {
 						@tailrec def loop() {
 							if(stack.nonEmpty) {
 								val $op = stack.head
@@ -1691,12 +1698,12 @@ object AsmExpansion {
 		def removeCastAt(castName: AbcQName, castIndex: Int) {
 			if(castIndex < ops.size) {
 				ops(castIndex) match {
-					case cast@CallProperty(name, 1) if (name == castName) => {
+					case cast@CallProperty(name, 1) if name == castName => {
 						removes = cast :: removes
 						@tailrec def loop(index: Int) {
 							if(index >= 0) {
 								ops(index) match {
-									case fp@FindPropStrict(name) if (name == castName) => removes = fp :: removes
+									case fp@FindPropStrict(aName) if aName == castName => removes = fp :: removes
 									case _ => loop(index - 1)
 								}
 							} else throwError("Malformed cast " + castName)
@@ -1731,24 +1738,24 @@ object AsmExpansion {
 					removeConvert = false
 					lineNum = line
 				}
-				case Pop() if (removePop) => {
+				case Pop() if removePop => {
 					queueOpToRemove(op)
 					removePop = false
 					removeConvert = false
 				}
-				case FindPropStrict(typeName) if (typeName == __asm) => {
-					removePop = false
-					removeConvert = false
-					balance += 1
-					queueOpToRemove(op)
-				}
-				case FindPropStrict(typeName) if (typeName == __cint) => {
+				case FindPropStrict(typeName) if typeName == __asm => {
 					removePop = false
 					removeConvert = false
 					balance += 1
 					queueOpToRemove(op)
 				}
-				case FindPropStrict(typeName) if (typeName == __dumpAfterASM) => {
+				case FindPropStrict(typeName) if typeName == __cint => {
+					removePop = false
+					removeConvert = false
+					balance += 1
+					queueOpToRemove(op)
+				}
+				case FindPropStrict(typeName) if typeName == __dumpAfterASM => {
 					removePop = false
 					removeConvert = false
 					if(balance > 0)
@@ -1757,7 +1764,7 @@ object AsmExpansion {
 					balance += 1
 					queueOpToRemove(op)
 				}
-				case FindPropStrict(typeName) if (typeName == __nakedName) => {
+				case FindPropStrict(typeName) if typeName == __nakedName => {
 					removePop = false
 					removeConvert = false
 					if(balance > 0)
@@ -1766,7 +1773,7 @@ object AsmExpansion {
 					balance += 1
 					queueOpToRemove(op)
 				}
-				case FindPropStrict(typeName) if (typeName == __maxStack) => {
+				case FindPropStrict(typeName) if typeName == __maxStack => {
 					removePop = false
 					removeConvert = false
 					if(balance > 0)
@@ -1796,7 +1803,7 @@ object AsmExpansion {
 					removeConvert = false
 					dumpAfterASM = Some(decode_String("__dumpAfterASM"))
 					queueOpToRemove(op)
-					stack.foreach(queueOpToRemove(_))
+					stack.foreach(queueOpToRemove)
 					balance -= 1
 				}
 				case CallProperty(property, numArguments) if (property == __dumpAfterASM) && (balance > 0) => {
@@ -1804,7 +1811,7 @@ object AsmExpansion {
 					removePop = true
 					removeConvert = false
 					queueOpToRemove(op)
-					stack.foreach(queueOpToRemove(_))
+					stack.foreach(queueOpToRemove)
 					balance -= 1
 				}
 				case CallPropVoid(property, numArguments) if (property == __nakedName) && (balance > 0) => {
@@ -1812,7 +1819,7 @@ object AsmExpansion {
 					removeConvert = false
 					naked = true
 					queueOpToRemove(op)
-					stack.foreach(queueOpToRemove(_))
+					stack.foreach(queueOpToRemove)
 					balance -= 1
 				}
 				case CallProperty(property, numArguments) if (property == __nakedName) && (balance > 0) => {
@@ -1820,7 +1827,7 @@ object AsmExpansion {
 					removePop = true
 					removeConvert = false
 					queueOpToRemove(op)
-					stack.foreach(queueOpToRemove(_))
+					stack.foreach(queueOpToRemove)
 					balance -= 1
 				}
 				case CallPropVoid(property, numArguments) if (property == __maxStack) && (balance > 0) => {
@@ -1828,7 +1835,7 @@ object AsmExpansion {
 					removeConvert = false
 					maxStack = decode_Long("__asmStack")
 					queueOpToRemove(op)
-					stack.foreach(queueOpToRemove(_))
+					stack.foreach(queueOpToRemove)
 					balance -= 1
 				}
 				case CallProperty(property, numArguments) if (property == __maxStack) && (balance > 0) => {
@@ -1836,7 +1843,7 @@ object AsmExpansion {
 					removePop = true
 					removeConvert = false
 					queueOpToRemove(op)
-					stack.foreach(queueOpToRemove(_))
+					stack.foreach(queueOpToRemove)
 					balance -= 1
 				}
 				case CallPropVoid(property, numArguments) if (property == __cint) && (balance > 0) => {
@@ -1863,11 +1870,12 @@ object AsmExpansion {
 			}
 		}
 
-		modified = (removes.nonEmpty || replacements.nonEmpty || (maxStack > 0))
+		modified = removes.nonEmpty || replacements.nonEmpty || (maxStack > 0)
 
 		if(modified) {
 			if(unresolveMarkerMap.nonEmpty) {
-				error("can't resolve label :" + unresolveMarkerMap.map(p => p._1).mkString(", "))
+        bytecode.dump()
+				sys.error("can't resolve label :" + unresolveMarkerMap.map(p => p._1).mkString(", "))
 			}
 			if(naked) {
 				if(ops.size >= 2) {
@@ -1882,7 +1890,7 @@ object AsmExpansion {
 				}
 			}
 
-			removes foreach {bytecode remove _}
+			removes foreach {bytecode.remove}
 			replacements.iterator foreach {x => bytecode.replace(x._1, x._2)}
 
 			val newOps = bytecode.ops
@@ -1909,7 +1917,7 @@ object AsmExpansion {
 				}
 			}
 
-			removes foreach {bytecode remove _}
+			removes foreach {bytecode.remove}
 			replacements.iterator foreach {x => bytecode.replace(x._1, x._2)}
 		}
 
@@ -1928,66 +1936,64 @@ object AsmExpansion {
 				var markerCopies = Map.empty[Marker, Marker]
 
 				var newOps: List[AbstractOp] = toBeRepeated.map {
-					p => p match {
-						case op: LookupSwitch => {
-							val newDefaultMarker = markerCopies.getOrElse(op.defaultCase, markers.mark(Nop()))
-							markerCopies = markerCopies.updated(op.defaultCase, newDefaultMarker)
-							val newCases = op.cases.map(m => {
-								val newMarker = markerCopies.getOrElse(m, markers.mark(Nop()))
-								markerCopies = markerCopies.updated(m, newMarker)
-								newMarker
-							}
-							).toArray
+          case op: LookupSwitch => {
+            val newDefaultMarker = markerCopies.getOrElse(op.defaultCase, markers.mark(Nop()))
+            markerCopies = markerCopies.updated(op.defaultCase, newDefaultMarker)
+            val newCases = op.cases.map(m => {
+              val newMarker = markerCopies.getOrElse(m, markers.mark(Nop()))
+              markerCopies = markerCopies.updated(m, newMarker)
+              newMarker
+            }
+            ).toArray
 
-							val newOp = LookupSwitch(newDefaultMarker, newCases)
+            val newOp = LookupSwitch(newDefaultMarker, newCases)
 
-							if(markers.hasMarkerFor(op)) {
-								val newMarker = markerCopies.getOrElse(markers.mark(op), markers.mark(newOp))
-								markers.forwardMarker(newMarker.op.get, newOp)
-								markerCopies = markerCopies.updated(markers.mark(op), newMarker)
-							}
+            if (markers.hasMarkerFor(op)) {
+              val newMarker = markerCopies.getOrElse(markers.mark(op), markers.mark(newOp))
+              markers.forwardMarker(newMarker.op.get, newOp)
+              markerCopies = markerCopies.updated(markers.mark(op), newMarker)
+            }
 
-							newOp
-						}
-						case op: Jump => {
-							val newMarker = markerCopies.getOrElse(op.marker, markers.mark(Nop()))
-							markerCopies = markerCopies.updated(op.marker, newMarker)
+            newOp
+          }
+          case op: Jump => {
+            val newMarker = markerCopies.getOrElse(op.marker, markers.mark(Nop()))
+            markerCopies = markerCopies.updated(op.marker, newMarker)
 
-							val newOp = Jump(newMarker)
+            val newOp = Jump(newMarker)
 
-							if(markers.hasMarkerFor(op)) {
-								val newMarker = markerCopies.getOrElse(markers.mark(op), markers.mark(newOp))
-								markers.forwardMarker(newMarker.op.get, newOp)
-								markerCopies = markerCopies.updated(markers.mark(op), newMarker)
-							}
+            if (markers.hasMarkerFor(op)) {
+              val newMarker = markerCopies.getOrElse(markers.mark(op), markers.mark(newOp))
+              markers.forwardMarker(newMarker.op.get, newOp)
+              markerCopies = markerCopies.updated(markers.mark(op), newMarker)
+            }
 
-							newOp
-						}
-						case op: AbstractConditionalOp => {
-							val newMarker = markerCopies.getOrElse(op.marker, markers.mark(Nop()))
-							markerCopies = markerCopies.updated(op.marker, newMarker)
+            newOp
+          }
+          case op: AbstractConditionalOp => {
+            val newMarker = markerCopies.getOrElse(op.marker, markers.mark(Nop()))
+            markerCopies = markerCopies.updated(op.marker, newMarker)
 
-							val newOp = Op.copyConditionalOp(op, newMarker)
+            val newOp = Op.copyConditionalOp(op, newMarker)
 
-							if(markers.hasMarkerFor(op)) {
-								val newMarker = markerCopies.getOrElse(markers.mark(op), markers.mark(newOp))
-								markers.forwardMarker(newMarker.op.get, newOp)
-								markerCopies = markerCopies.updated(markers.mark(op), newMarker)
-							}
+            if (markers.hasMarkerFor(op)) {
+              val newMarker = markerCopies.getOrElse(markers.mark(op), markers.mark(newOp))
+              markers.forwardMarker(newMarker.op.get, newOp)
+              markerCopies = markerCopies.updated(markers.mark(op), newMarker)
+            }
 
-							newOp
-						}
-						case op@_ => {
-							val newOp = op.opCopy
-							if(markers.hasMarkerFor(op)) {
-								val newMarker = markerCopies.getOrElse(markers.mark(op), markers.mark(newOp))
-								markers.forwardMarker(newMarker.op.get, newOp)
-								markerCopies = markerCopies.updated(markers.mark(op), newMarker)
-							}
-							newOp
-						}
-					}
-				}.toList
+            newOp
+          }
+          case op:AbstractOp => {
+            val newOp = op.opCopy()
+            if (markers.hasMarkerFor(op)) {
+              val newMarker = markerCopies.getOrElse(markers.mark(op), markers.mark(newOp))
+              markers.forwardMarker(newMarker.op.get, newOp)
+              markerCopies = markerCopies.updated(markers.mark(op), newMarker)
+            }
+            newOp
+          }
+        }.toList
 				val nops = markerCopies.filter(_._2.op.get.opCode == Op.nop).map(x => x._2)
 				if(nops.nonEmpty) {
 					val nop = Nop()
@@ -2006,17 +2012,17 @@ object AsmExpansion {
 					removePop = false
 					lineNum = line
 				}
-				case Pop() if (removePop) => {
+				case Pop() if removePop => {
 					queueOpToRemove(op)
 					removePop = false
 				}
-				case FindPropStrict(typeName) if (typeName == __beginRepeat) => {
+				case FindPropStrict(typeName) if typeName == __beginRepeat => {
 					stack = List.empty[AbstractOp]
 					removePop = false
 					balance += 1
 					queueOpToRemove(op)
 				}
-				case FindPropStrict(typeName) if (typeName == __endRepeat) => {
+				case FindPropStrict(typeName) if typeName == __endRepeat => {
 					removePop = false
 					balance += 1
 					queueOpToRemove(op)
@@ -2056,7 +2062,7 @@ object AsmExpansion {
 
 		modified ||= (removes.nonEmpty || replacements.nonEmpty)
 
-		removes foreach {bytecode remove _}
+		removes foreach {bytecode.remove}
 		replacements.iterator foreach {x => bytecode.replace(x._1, x._2)}
 
 		if(modified) {

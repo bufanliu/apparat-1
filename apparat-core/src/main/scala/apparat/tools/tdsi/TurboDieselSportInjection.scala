@@ -28,9 +28,11 @@ import apparat.swf._
 import annotation.tailrec
 import apparat.bytecode.optimization._
 import apparat.tools.{ApparatConfiguration, ApparatApplication, ApparatTool}
+import apparat.actors.Futures
 
 /**
  * @author Joa Ebert
+ * @author Patrick Le Clec'h
  */
 object TurboDieselSportInjection {
   def main(args: Array[String]): Unit = ApparatApplication(new TDSITool, args)
@@ -71,10 +73,23 @@ object TurboDieselSportInjection {
 
     // clear some apparat internal classes from the swf
     // TODO more to add
-    val classesToRemove = List(AbcQName('Structure, AbcNamespace(22, Symbol("apparat.memory"))))
-    val methodsToRemove = List(AbcQName('map, AbcNamespace(22, Symbol("apparat.memory"))))
+    val classesToRemove = List(
+      AbcQName('Structure, AbcNamespace(22, Symbol("apparat.memory"))),
+      AbcQName('*, AbcNamespace(22, Symbol("apparat.asm")))
+    )
+    val methodsToRemove = List(
+      AbcQName('map, AbcNamespace(22, Symbol("apparat.memory"))),
+      AbcQName('*, AbcNamespace(22, Symbol("apparat.asm")))
+    )
 
-    def cleanABC(abc:Abc) {
+    def nameEquals(p1: AbcQName, p2: AbcName) = {
+      (p1 == p2) || (p1.name == '* && (p2 match {
+        case AbcQName(_, ns) => ns == p1.namespace
+        case _ => false
+      }))
+    }
+
+    def cleanABC(abc: Abc) {
       var newScripts = List.empty[AbcScript]
       var newMethods = abc.methods
       var newMetadatas = abc.metadata
@@ -88,13 +103,20 @@ object TurboDieselSportInjection {
           trt <- script.traits
         } {
           trt match {
-            case AbcTraitClass(aName, _, nt, md) if (classesToRemove.exists(_ == aName) || (nt.inst.base.exists(n => classesToRemove.exists(_ == n)))) =>
+            case AbcTraitClass(aName, _, nt, md) if classesToRemove.exists(nameEquals(_, aName)) || nt.inst.base.exists(n => classesToRemove.exists(nameEquals(_, n))) =>
               checkForEmptyScript = true
               md match {
                 case Some(metas) => newMetadatas = newMetadatas.filter(m => metas.exists(_ != m))
                 case _ =>
               }
-            case AbcTraitMethod(aName, _, m, _, _, _) if (methodsToRemove.exists(_ == aName)) =>
+            case AbcTraitConst(aName, _, _, _, _, md) if classesToRemove.exists(nameEquals(_, aName)) => {
+              checkForEmptyScript = true
+              md match {
+                case Some(metas) => newMetadatas = newMetadatas.filter(m => metas.exists(_ != m))
+                case _ =>
+              }
+            }
+            case AbcTraitMethod(aName, _, m, _, _, _) if methodsToRemove.exists(nameEquals(_, aName)) =>
               checkForEmptyScript = true
               checkForInit = true
               newMethods = newMethods.filter(_ != m)
@@ -116,12 +138,11 @@ object TurboDieselSportInjection {
         abc.scripts = newScripts.reverse.toArray
       }
       abc.methods = newMethods
-      abc.metadata= newMetadatas
+      abc.metadata = newMetadatas
     }
 
-
     override def run() = {
-      SwfTags.tagFactory = (kind: Int) => kind match {
+      SwfTags.tagFactory = {
         case SwfTags.DoABC => Some(new DoABC)
         case SwfTags.DoABC1 => Some(new DoABC)
         case _ => None
@@ -132,7 +153,7 @@ object TurboDieselSportInjection {
           (TagContainer fromFile library).tags collect {
             case x: DoABC => x
           } map {
-            Abc fromDoABC _
+            Abc.fromDoABC
           }
         }
       }
@@ -146,28 +167,34 @@ object TurboDieselSportInjection {
       val cont = TagContainer fromFile source
       val allABC = (for (doABC <- cont.tags collect {
         case doABC: DoABC => doABC
-      }) yield (doABC -> (Abc fromDoABC doABC))).toMap
+      }) yield doABC -> (Abc fromDoABC doABC)).toMap
       val environment = allABC.valuesIterator.toList ::: abcLibraries
-      val macroExpansion = if (macros) Some(new MacroExpansion(environment)) else None
-      val inlineExpansion = if (inline) Some(new InlineExpansion(environment)) else None
-      val memoryExpansion = if (alchemy) Some(new MemoryHelperExpansion(environment)) else None
 
       allABC foreach {
         _._2.loadBytecode()
       }
 
+      val macroExpansion = if (macros) Some(new MacroExpansion(environment)) else None
+      val inlineExpansion = if (inline) Some(new InlineExpansion(environment)) else None
+      val memoryExpansion = if (alchemy) Some(new MemoryHelperExpansion(environment)) else None
+
       var rebuildCpoolSet = Set.empty[Abc]
+      var peepholeDoneSet = Set.empty[Abc]
+
+      //        val allAsm = allABC.map { case (d,a) => d -> a.scripts.filter(_.isDefinedImport(AsmExpansion.__asm)) }
+      //        println(allAsm)
 
       if (asm) {
         for ((doABC, abc) <- allABC) {
+          var rebuildCpool = false
+
           for {
             method <- abc.methods
             body <- method.body
             bytecode <- body.bytecode
           } {
-            var rebuildCpool = false
 
-            @tailrec def modifyBytecode(counter: Int): Unit = {
+            @tailrec def modifyBytecode(counter: Int, hasBeenModified: Boolean = false): Boolean = {
               var modified = false
 
               if (AsmExpansion(bytecode)) {
@@ -175,40 +202,52 @@ object TurboDieselSportInjection {
                 rebuildCpool = true
               }
 
-              if (modified && (counter > 0)) {
-                modifyBytecode(counter - 1)
-              } else if (counter <= 0) {
+              if (counter <= 0) {
                 log.warning("Too many optimisation for " + method.name)
               }
+              if (modified && (counter > 0)) {
+                modifyBytecode(counter - 1, hasBeenModified = true)
+              } else hasBeenModified
+
             }
 
+            PeepholeOptimizations.replace_getlex_call(bytecode)
             PeepholeOptimizations(bytecode)
-            modifyBytecode(31)
 
-            if (rebuildCpool) {
-              rebuildCpoolSet += abc
-            }
+            modifyBytecode(31)
           }
+
+          if (rebuildCpool) {
+            rebuildCpoolSet += abc
+          }
+
+          peepholeDoneSet += abc
         }
       }
 
       for ((doABC, abc) <- allABC) {
         var rebuildCpool = rebuildCpoolSet.contains(abc)
-
         for {
           method <- abc.methods
           body <- method.body
           bytecode <- body.bytecode
         } {
+          if (!peepholeDoneSet.contains(abc)) {
+            PeepholeOptimizations.replace_getlex_call(bytecode)
+            PeepholeOptimizations(bytecode)
+
+            peepholeDoneSet += abc
+          }
+
           @tailrec def modifyBytecode(counter: Int): Unit = {
             var modified = false
 
-            if (inline && (inlineExpansion.get.expand(bytecode))) {
+            if (inline && inlineExpansion.get.expand(bytecode)) {
               modified = true
               rebuildCpool = true
             }
 
-            if (macros && (macroExpansion.get.expand(bytecode))) {
+            if (macros && macroExpansion.get.expand(bytecode)) {
               modified = true
               rebuildCpool = true
             }
@@ -219,10 +258,10 @@ object TurboDieselSportInjection {
               if (! {
                 macroExpansion match {
                   case Some(me) => {
-                    abc.types.exists(n => (n.inst.base.getOrElse(AbcConstantPool.EMPTY_NAME) == me.apparatMacro) && (n.klass.traits.exists(p => p match {
-                      case AbcTraitMethod(_, _, meth, _, _, _) if (meth == method) => true
+                    abc.types.exists(n => (n.inst.base.getOrElse(AbcConstantPool.EMPTY_NAME) == me.apparatMacro) && n.klass.traits.exists {
+                      case AbcTraitMethod(_, _, meth, _, _, _) if meth == method => true
                       case _ => false
-                    })))
+                    })
                   }
                   case _ => false
                 }

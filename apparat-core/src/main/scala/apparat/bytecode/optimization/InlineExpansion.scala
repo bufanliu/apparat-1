@@ -26,6 +26,7 @@ import apparat.bytecode.operations._
 import apparat.bytecode.analysis.{StackAnalysis, LocalCount}
 import apparat.log.SimpleLog
 import annotation.tailrec
+import apparat.actors.Futures
 
 /**
  * @author Joa Ebert
@@ -36,33 +37,59 @@ class InlineExpansion(abcs: List[Abc]) extends SimpleLog {
 	lazy val uintName = AbcQName('uint, nsGlobal)
 	lazy val apparatMacro = AbcQName('Inlined, AbcNamespace(AbcNamespaceKind.Package, Symbol("apparat.inline")))
 	lazy val macros: Map[AbcName, (AbcNominalType, Abc)] = {
-		Map((for(abc <- abcs; nominal <- abc.types if ((nominal.inst.base getOrElse AbcConstantPool.EMPTY_NAME) == apparatMacro) && !nominal.inst.isInterface) yield (nominal.inst.name -> (nominal,abc))):_*)
+		Map((for(abc <- abcs; nominal <- abc.types if ((nominal.inst.base getOrElse AbcConstantPool.EMPTY_NAME) == apparatMacro) && !nominal.inst.isInterface) yield nominal.inst.name ->(nominal, abc)):_*)
 	}
 
 	def validate() {
 		for((nominal, abc) <- macros.valuesIterator) {
-			if(nominal.inst.traits.length != 1) error("No instance members are allowed.")
-			if(!nominal.inst.isSealed) error("Macro must not be a dynamic class.")
+			if(nominal.inst.traits.length != 0) {
+        sys.error("No instance members are allowed.")
+      }
+			if(!nominal.inst.isSealed) sys.error("Macro must not be a dynamic class.")
 			for(t <- nominal.klass.traits) {
 				t match {
 					case AbcTraitMethod(_, _, method, _, _, _) => {
-						if(!method.body.isDefined) error("Method body is not defined.")
-						if(method.hasOptionalParameters) error("Macro may not have any optional parameters.")
-						if(method.needsActivation) error("Macro may not require an activation scope.")
-						if(method.needsRest) error("Macro may not use rest parameters.")
-						if(method.setsDXNS) error("Macro may not change the default XML namespace.")
-						if(method.body.get.exceptions.length != 0) error("Macro may not throw any exception.")
-						if(method.body.get.traits.length != 0) error("Macro may not use constant variables or throw any exceptions.")
+						if(!method.body.isDefined) sys.error("Method body is not defined.")
+						if(method.hasOptionalParameters) sys.error("Macro may not have any optional parameters.")
+						if(method.needsActivation) sys.error("Macro may not require an activation scope.")
+						if(method.needsRest) sys.error("Macro may not use rest parameters.")
+						if(method.setsDXNS) sys.error("Macro may not change the default XML namespace.")
+						if(method.body.get.exceptions.length != 0) sys.error("Macro may not throw any exception.")
+						if(method.body.get.traits.length != 0) sys.error("Macro may not use constant variables or throw any exceptions.")
 					}
-					case other => error("Only static methods are allowed.")
+					case other => sys.error("Only static methods are allowed.")
 				}
 			}
 		}
 	}
 
-	@inline private def registerOf(op: AbstractOp): Int = op match {
+  validate()
+
+  /**
+   * @author Patrick Le Clec'h
+   *         asc2 use GetLocal(0) CallProp.. to call a someMacro which is not valid for Apparat
+   *         so let's replace GetLocal(0) by GetLex(macroName)
+   */
+  val bytecodePerMacro = macros.values.map {
+    case (n, a) => n.inst.name -> n.klass.traits.collect {
+      case AbcTraitMethod(_, _, method, _, _, _) => method.body.get.bytecode.get
+    }
+  }
+
+  def ungetlocal0() {
+    for {
+      (n, bcs) <- bytecodePerMacro
+      bc <- bcs
+    } {
+      Futures.future(PeepholeOptimizations.replace_getlocal0(n, bc))()
+    }
+  }
+
+  ungetlocal0()
+
+  @inline private def registerOf(op: AbstractOp): Int = op match {
 		case opWithRegister: OpWithRegister => opWithRegister.register
-		case _ => error("Unexpected "+op+".")
+		case _ => sys.error("Unexpected "+op+".")
 	}
 
 	@tailrec final def expand(bytecode: Bytecode, haveBeenModified:Boolean=false): Boolean = {
@@ -73,38 +100,38 @@ class InlineExpansion(abcs: List[Abc]) extends SimpleLog {
 		var macroStack = List.empty[(AbcNominalType, Abc)]
 		var replacements = Map.empty[AbstractOp, List[AbstractOp]]
 		var localCount = LocalCount(bytecode)
-		var markers = bytecode.markers
+		val markers = bytecode.markers
 		val debugFile = bytecode.ops find (_.opCode == Op.debugfile)
 
 		def constValue2Ops(const:AbcTraitConst, value:Any):List[AbstractOp] = const.valueType.get match {
 			case AbcConstantType.Double => const.typeName match {
-				case aName if aName == uintName => List((value.asInstanceOf[Double].toLong match {
-					case i if (i >= -128 && i <= 127 ) => PushByte(i.toInt)
-					case i if (i >= -32768 && i <= 32767 ) => PushShort(i.toInt)
-					case i if (i >= -2147483648 && i <= 2147483647 ) => PushInt(i.toInt)
-					case i => if (i < -2147483648) PushInt((i+(1<<32)).toInt) else PushInt((i-(1<<32)+1).toInt)
-				}), CoerceUInt())
+				case aName if aName == uintName => List(value.asInstanceOf[Double].toLong match {
+          case i if i >= -128 && i <= 127 => PushByte(i.toInt)
+          case i if i >= -32768 && i <= 32767 => PushShort(i.toInt)
+          case i if i >= -2147483648 && i <= 2147483647 => PushInt(i.toInt)
+          case i => if (i < -2147483648) PushInt((i + (1 << 32)).toInt) else PushInt((i - (1 << 32) + 1).toInt)
+        }, CoerceUInt())
 				case _ => List(PushDouble(value.asInstanceOf[Double]))
 			}
 			case AbcConstantType.False => List(PushFalse())
 			case AbcConstantType.Int => {
 				value.asInstanceOf[Int] match {
-					case i if (i >= -128 && i <= 127 ) => List(PushByte(i))
-					case i if (i >= -32768 && i <= 32767 ) => List(PushShort(i))
+					case i if i >= -128 && i <= 127 => List(PushByte(i))
+					case i if i >= -32768 && i <= 32767 => List(PushShort(i))
 					case i => List(PushInt(i))
 				}
 			}
 			case AbcConstantType.Null => List(PushNull())
 			case AbcConstantType.True => List(PushTrue())
-			case AbcConstantType.UInt => List( (value.asInstanceOf[Long] match {
-					case i if (i >= -128 && i <= 127 ) => PushByte(i.toInt)
-					case i if (i >= -32768 && i <= 32767 ) => PushShort(i.toInt)
-					case i if (i >= -2147483648 && i <= 2147483647 ) => PushInt(i.toInt)
-					case i => if (i < -2147483648) PushInt((i+(1<<32)).toInt) else PushInt((i-(1<<32)+1).toInt)
-				}), CoerceUInt())
+			case AbcConstantType.UInt => List( value.asInstanceOf[Long] match {
+        case i if i >= -128 && i <= 127 => PushByte(i.toInt)
+        case i if i >= -32768 && i <= 32767 => PushShort(i.toInt)
+        case i if i >= -2147483648 && i <= 2147483647 => PushInt(i.toInt)
+        case i => if (i < -2147483648) PushInt((i + (1 << 32)).toInt) else PushInt((i - (1 << 32) + 1).toInt)
+      }, CoerceUInt())
 			case AbcConstantType.Undefined => List(PushUndefined())
 			case AbcConstantType.Utf8 => List(PushString(value.asInstanceOf[Symbol]))
-			case x@_ => error("Error : ("+const+") unknown constant type " + x)
+			case x@_ => sys.error("Error : ("+const+") unknown constant type " + x)
 		}
 
 		@inline def insert(op: AbstractOp, property: AbcName, numArguments: Int) = {
@@ -119,71 +146,77 @@ class InlineExpansion(abcs: List[Abc]) extends SimpleLog {
 
 							method.body match {
 								case Some(body) => body.bytecode match {
-									case Some(macro) => {
+									case Some(someMacro) => {
 										val parameterCount = method.parameters.length
 										val newLocals = body.localCount - 1
-										val oldDebugFile = macro.ops.find (_.opCode == Op.debugfile)
+										val oldDebugFile = someMacro.ops.find (_.opCode == Op.debugfile)
 										val gathering = Nop()
-										val delta = -macro.ops.indexWhere(_.opCode == Op.pushscope) - 1 + parameterCount
-										val nopReturn = macro.ops.last.isInstanceOf[OpThatReturns] && (macro.ops.count { case x: OpThatReturns => true; case _ => false } == 1)
-										val ops = macro.ops.view(macro.ops.indexWhere(_.opCode == Op.pushscope) + 1, macro.ops.length)
+										val delta = -someMacro.ops.indexWhere(_.opCode == Op.pushscope) - 1 + parameterCount
+										val nopReturn = someMacro.ops.last.isInstanceOf[OpThatReturns] && (someMacro.ops.count { case x: OpThatReturns => true; case _ => false } == 1)
+										val ops = someMacro.ops.view(someMacro.ops.indexWhere(_.opCode == Op.pushscope) + 1, someMacro.ops.length)
 										var replacement =
 										(((parameterCount - 1) to 0 by -1) map { register => SetLocal(localCount + register) } toList) :::
-										(ops.zipWithIndex.map{p => p._1 match {
-											//
-											// Prohibit use of "this".
-											//
-											case GetLocal(0) => error("Illegal GetLocal(0).")
-											case SetLocal(0) => error("Illegal SetLocal(0).")
-											case DecLocal(0) => error("Illegal DecLocal(0).")
-											case DecLocalInt(0) => error("Illegal DecLocalInt(0).")
-											case IncLocal(0) => error("Illegal IncLocal(0).")
-											case IncLocalInt(0) => error("Illegal IncLocalInt(0).")
-											case Kill(0) => error("Illegal Kill(0).")
-											case Debug(_, _, 0, _) => Nop()
+										ops.zipWithIndex.map {
+                      p => p._1 match {
+                        //
+                        // Prohibit use of "this".
+                        //
+                        case GetLocal(0) => sys.error("Illegal GetLocal(0).")
+                        case SetLocal(0) => sys.error("Illegal SetLocal(0).")
+                        case DecLocal(0) => sys.error("Illegal DecLocal(0).")
+                        case DecLocalInt(0) => sys.error("Illegal DecLocalInt(0).")
+                        case IncLocal(0) => sys.error("Illegal IncLocal(0).")
+                        case IncLocalInt(0) => sys.error("Illegal IncLocalInt(0).")
+                        case Kill(0) => sys.error("Illegal Kill(0).")
+                        case Debug(_, _, 0, _) => Nop()
 
-											//
-											// Shift all local variables
-											//
-											case GetLocal(x) => GetLocal(localCount + x - 1)
-											case SetLocal(x) => SetLocal(localCount + x - 1)
-											case DecLocal(x) => DecLocal(localCount + x - 1)
-											case DecLocalInt(x) => DecLocalInt(localCount + x - 1)
-											case IncLocal(x) => IncLocal(localCount + x - 1)
-											case IncLocalInt(x) => IncLocalInt(localCount + x - 1)
-											case Kill(x) => Kill(localCount + x - 1)
-											case Debug(kind, name, x, extra) => Debug(kind, name, localCount + x - 1, extra)
+                        //
+                        // Shift all local variables
+                        //
+                        case GetLocal(x) => GetLocal(localCount + x - 1)
+                        case SetLocal(x) => SetLocal(localCount + x - 1)
+                        case DecLocal(x) => DecLocal(localCount + x - 1)
+                        case DecLocalInt(x) => DecLocalInt(localCount + x - 1)
+                        case IncLocal(x) => IncLocal(localCount + x - 1)
+                        case IncLocalInt(x) => IncLocalInt(localCount + x - 1)
+                        case Kill(x) => Kill(localCount + x - 1)
+                        case Debug(kind, name, x, extra) => Debug(kind, name, localCount + x - 1, extra)
 
-											//
-											// Patch return statements
-											//
-											case ReturnValue() => if(nopReturn) Nop() else Jump(markers mark gathering)
-											case ReturnVoid() => if(nopReturn) Nop() else Jump(markers mark gathering)
-											case ggs@GetGlobalScope() if (ops(p._2+1).opCode == Op.getslot) => {
-												val gs = ops(p._2+1).asInstanceOf[GetSlot]
-												(slotCache.getOrElse(gs.slot, null) match {
-													case stc@Some(tc) => stc
-													case None => None
-													case _ => parentABC.scripts.flatMap(_.traits.collect{case atc:AbcTraitClass if (atc.index == gs.slot) => atc}) headOption match {
-														case stc@Some(tc) if (macros.contains(tc.name)) => {
-															slotCache = slotCache.updated(gs.slot, stc)
-															stc
-														}
-														case _ => {
-															slotCache = slotCache.updated(gs.slot, None)
-															None
-														}
-													}
-												}) match {
-													case Some(tc) => Nop()
-													case _ => ggs.opCopy()
-												}
-											}
-											case GetSlot(x) if (slotCache.contains(x) && (ops(p._2-1).opCode == Op.getglobalscope)) => {
-												GetLex(slotCache(x).get.name)
-											}
-											case other => other.opCopy()
-										}}.toList) ::: List(gathering) ::: (List.tabulate(newLocals) { register => Kill(localCount + register) })
+                        //
+                        // Patch return statements
+                        //
+                        case ReturnValue() => if (nopReturn) Nop() else Jump(markers mark gathering)
+                        case ReturnVoid() => if (nopReturn) Nop() else Jump(markers mark gathering)
+                        case ggs@GetGlobalScope() if ops(p._2 + 1).opCode == Op.getslot => {
+                          val gs = ops(p._2 + 1).asInstanceOf[GetSlot]
+                          (slotCache.getOrElse(gs.slot, null) match {
+                            case stc@Some(tc) => stc
+                            case None => None
+                            case _ => parentABC.scripts.flatMap(_.traits.collect {
+                              case atc: AbcTraitClass if atc.index == gs.slot => atc
+                            }) headOption match {
+                              case stc@Some(tc) if macros.contains(tc.name) => {
+                                slotCache = slotCache.updated(gs.slot, stc)
+                                stc
+                              }
+                              case _ => {
+                                slotCache = slotCache.updated(gs.slot, None)
+                                None
+                              }
+                            }
+                          }) match {
+                            case Some(tc) => Nop()
+                            case _ => ggs.opCopy()
+                          }
+                        }
+                        case GetSlot(x) if slotCache.contains(x) && (ops(p._2 - 1).opCode == Op.getglobalscope) => {
+                          GetLex(slotCache(x).get.name)
+                        }
+                        case other => other.opCopy()
+                      }
+                    }.toList ::: List(gathering) ::: List.tabulate(newLocals) {
+                      register => Kill(localCount + register)
+                    }
 
 										//
 										// Clean up
@@ -195,83 +228,83 @@ class InlineExpansion(abcs: List[Abc]) extends SimpleLog {
 											// Patch all markers.
 											//
 											case branch:Jump if branch.marker.op.get != gathering => {
-												val newOp = Jump(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = Jump(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfEqual => {
-												val newOp = IfEqual(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = IfEqual(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfTrue => {
-												val newOp = IfTrue(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = IfTrue(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfFalse => {
-												val newOp = IfFalse(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = IfFalse(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfGreaterEqual =>  {
-												val newOp = IfGreaterEqual(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = IfGreaterEqual(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfGreaterThan =>  {
-												val newOp = Jump(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = Jump(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfLessEqual =>  {
-												val newOp = IfLessEqual(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = IfLessEqual(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfLessThan =>  {
-												val newOp = IfLessThan(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = IfLessThan(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfNotGreaterEqual =>  {
-												val newOp = IfNotGreaterEqual(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = IfNotGreaterEqual(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfNotGreaterThan =>  {
-												val newOp = IfNotGreaterThan(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = IfNotGreaterThan(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfNotLessEqual =>  {
-												val newOp = IfNotLessEqual(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = IfNotLessEqual(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfNotLessThan =>  {
-												val newOp = IfNotLessThan(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = IfNotLessThan(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfNotEqual =>  {
-												val newOp = IfNotEqual(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = IfNotEqual(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfStrictEqual =>  {
-												val newOp = IfStrictEqual(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = IfStrictEqual(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case branch:IfStrictNotEqual =>  {
-												val newOp = IfStrictNotEqual(markers mark replacement((macro.ops indexOf branch.marker.op.get) + delta))
+												val newOp = IfStrictNotEqual(markers mark replacement((someMacro.ops indexOf branch.marker.op.get) + delta))
 												markers.forwardMarker(branch, newOp)
 												newOp
 											}
 											case lookup:LookupSwitch => {
-												val newOp = LookupSwitch(markers mark replacement((macro.ops indexOf lookup.defaultCase.op.get) + delta), lookup.cases map {
-													`case` => markers mark replacement((macro.ops indexOf `case`.op.get) + delta)//the reward is cheese!
+												val newOp = LookupSwitch(markers mark replacement((someMacro.ops indexOf lookup.defaultCase.op.get) + delta), lookup.cases map {
+													`case` => markers mark replacement((someMacro.ops indexOf `case`.op.get) + delta)//the reward is cheese!
 												})
 												markers.forwardMarker(lookup, newOp)
 												newOp
@@ -284,8 +317,8 @@ class InlineExpansion(abcs: List[Abc]) extends SimpleLog {
 										//
 
 										replacement = debugFile match {
-											case Some(debugFile) => oldDebugFile match {
-												case Some(oldDebugFile) => List(oldDebugFile.opCopy()) ::: replacement ::: List(debugFile.opCopy())
+											case Some(someDebugFile) => oldDebugFile match {
+												case Some(someOldDebugFile) => List(someOldDebugFile.opCopy()) ::: replacement ::: List(someDebugFile.opCopy())
 												case None => replacement
 											}
 											case None => replacement
@@ -306,12 +339,12 @@ class InlineExpansion(abcs: List[Abc]) extends SimpleLog {
 						case const: AbcTraitConst => {
 							const.value match {
 								case Some(value) => replacements += op -> constValue2Ops (const, value)
-								case _ => error("Error : ("+const+") only constant int, uint, String, Number, Boolean can be inlined")
+								case _ => sys.error("Error : ("+const+") only constant int, uint, String, Number, Boolean can be inlined")
 							}
 							balance -= 1
 							true
 						}
-						case _ => error("Unexpected trait "+anyTrait)
+						case _ => sys.error("Unexpected trait "+anyTrait)
 					}
 				}
 				case None => false
@@ -349,7 +382,7 @@ class InlineExpansion(abcs: List[Abc]) extends SimpleLog {
 		}
 
 		if(modified) {
-			removes foreach { bytecode remove _ }
+			removes foreach { bytecode.remove }
 			replacements.iterator foreach { x => bytecode.replace(x._1, x._2) }
 
 			bytecode.body match {
@@ -362,7 +395,7 @@ class InlineExpansion(abcs: List[Abc]) extends SimpleLog {
 				case None => log.warning("Bytecode body missing. Cannot adjust stack/locals.")
 			}
 
-			expand(bytecode, true)
+			expand(bytecode, haveBeenModified = true)
 		} else {
 			haveBeenModified
 		}
