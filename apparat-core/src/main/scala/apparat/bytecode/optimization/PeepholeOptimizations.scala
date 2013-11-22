@@ -97,20 +97,30 @@ object PeepholeOptimizations extends (Bytecode => Boolean) {
           case call@Call(n) => {
             unwindParameterStack(-n)
             parameters match {
-              case GetGlobalScope() :: GetLex(aName) :: xs => {
-                replace(parameters.head, Nop())
-                replace(parameters.tail.head, FindPropStrict(aName))
-                parameters = xs
-                ops.tail match {
-                  case Pop() :: xx => {
-                    remove(ops.tail.head)
-                    ops = ops.tail
-                    replace(call, CallPropVoid(aName, n))
+              case x :: xs => {
+                skipUntil(parameters, Op.getglobalscope) match {
+                  case (ggs:GetGlobalScope, rest) => {
+                    skipUntil(rest, Op.getlex) match  {
+                      case (getLex:GetLex, rest2) => {
+                        replace(ggs, Nop())
+                        replace(getLex, FindPropStrict(getLex.typeName))
+                        parameters = rest2
+                        ops.tail match {
+                          case Pop() :: xx => {
+                            remove(ops.tail.head)
+                            ops = ops.tail
+                            replace(call, CallPropVoid(getLex.typeName, n))
+                          }
+                          case _ => {
+                            addToParameter(PushByte(1))
+                            replace(call, CallProperty(getLex.typeName, n))
+                          }
+                        }
+                      }
+                      case _ =>
+                    }
                   }
-                  case _ => {
-                    addToParameter(PushByte(1))
-                    replace(call, CallProperty(aName, n))
-                  }
+                  case _ =>
                 }
               }
               case _ =>
@@ -118,6 +128,26 @@ object PeepholeOptimizations extends (Bytecode => Boolean) {
           }
           case _ => addToParameter()
         }
+      }
+
+      def skipUntil(_rest: List[AbstractOp], opCode: Int): (AbstractOp, List[AbstractOp]) = {
+        var rest: List[AbstractOp] = _rest
+        var aop: AbstractOp = null
+        var continue = true
+        while (continue && (rest != Nil)) {
+          rest.head match {
+            case op if op.opCode == opCode => {
+              aop = op
+              rest = rest.tail
+              continue = false
+            }
+            case op if op.operandDelta == 0 => {
+              rest = rest.tail
+            }
+            case _ => continue = false
+          }
+        }
+        (aop, rest)
       }
     }
     tf()

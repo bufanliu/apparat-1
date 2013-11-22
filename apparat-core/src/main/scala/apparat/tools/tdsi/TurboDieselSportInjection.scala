@@ -28,7 +28,6 @@ import apparat.swf._
 import annotation.tailrec
 import apparat.bytecode.optimization._
 import apparat.tools.{ApparatConfiguration, ApparatApplication, ApparatTool}
-import apparat.actors.Futures
 
 /**
  * @author Joa Ebert
@@ -76,7 +75,7 @@ object TurboDieselSportInjection {
     val classesToRemove = List(
       AbcQName('Structure, AbcNamespace(22, Symbol("apparat.memory"))),
       AbcQName('Macro, AbcNamespace(22, Symbol("apparat.inline"))),
-      AbcQName('Inline, AbcNamespace(22, Symbol("apparat.inline"))),
+      AbcQName('Inlined, AbcNamespace(22, Symbol("apparat.inline"))),
       AbcQName('*, AbcNamespace(22, Symbol("apparat.asm")))
     )
     val methodsToRemove = List(
@@ -202,7 +201,6 @@ object TurboDieselSportInjection {
             body <- method.body
             bytecode <- body.bytecode
           } {
-
             @tailrec def modifyBytecode(counter: Int, hasBeenModified: Boolean = false): Boolean = {
               var modified = false
 
@@ -233,6 +231,8 @@ object TurboDieselSportInjection {
           peepholeDoneSet += abc
         }
       }
+
+      var eraseTags = List.empty[SwfTag]
 
       for ((doABC, abc) <- allABC) {
         var rebuildCpool = rebuildCpoolSet.contains(abc)
@@ -297,21 +297,27 @@ object TurboDieselSportInjection {
 
         cleanABC(abc)
 
-        if (rebuildCpool) {
-          //
-          // We have to rebuild the cpool here since both Macro and Inline
-          // expansion could include operations from a different ABC
-          // and in that case its values do not belong to the cpool.
-          //
+        if (abc.scripts.size == 0)
+          eraseTags = doABC :: eraseTags
+        else {
+          if (rebuildCpool) {
+            //
+            // We have to rebuild the cpool here since both Macro and Inline
+            // expansion could include operations from a different ABC
+            // and in that case its values do not belong to the cpool.
+            //
 
-          log.info("Cpool rebuild required.")
-          abc.cpool = QuickAbcConstantPoolBuilder using abc
+            log.info("Cpool rebuild required.")
+            abc.cpool = QuickAbcConstantPoolBuilder using abc
+          }
+
+          abc.saveBytecode()
+          abc write doABC
         }
-
-        abc.saveBytecode()
-        abc write doABC
       }
-
+      if (eraseTags.nonEmpty) {
+        cont.tags = cont.tags.filterNot(t => eraseTags.contains(t))
+      }
       cont write target
     }
   }
