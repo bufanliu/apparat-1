@@ -112,7 +112,7 @@ object BytecodeDecoder {
 			case Op.equals => Equals()
 			case Op.esc_xattr => EscapeXMLAttribute()
 			case Op.esc_xelem => EscapeXMLElement()
-			case Op.finddef => error("finddef")
+			case Op.finddef => FindDef(name)
 			case Op.findproperty => FindProperty(property)
 			case Op.findpropstrict => FindPropStrict(property)
 			case Op.getdescendants => GetDescendants(property)
