@@ -85,6 +85,7 @@ final class Swf extends Dumpable with SwfTagMapping {
   var compressed: Boolean = true
   var compressedType = 'C'
   var version: Int = 10
+  var isSWC: Boolean = false
   var frameSize: Rect = new Rect(0, 20000, 0, 20000)
   var frameRate: Float = 255.0f
   var frameCount: Int = 1
@@ -186,7 +187,7 @@ final class Swf extends Dumpable with SwfTagMapping {
 
   def write(swc: Swc): Unit = {
     val byteArrayOutputStream = new JByteArrayOutputStream()
-
+    isSWC = true;
     try {
       write(byteArrayOutputStream)
       swc.library = Some(byteArrayOutputStream.toByteArray)
@@ -219,7 +220,7 @@ final class Swf extends Dumpable with SwfTagMapping {
       buffer.close()
 
       compressedType = compressed match {
-        case true => if (version < 13) 'C' else 'Z'
+        case true => if (version < 13 || isSWC) 'C' else 'Z'
         case _ => 'F'
       }
 
